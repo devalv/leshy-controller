@@ -1,0 +1,26 @@
+# https://golangci-lint.run/docs/configuration/file/
+version: "2"
+
+linters:
+  default: all
+  disable:
+    - wsl
+    - wsl_v5
+    - depguard
+    - err113
+    - noinlineerr
+    - nonamedreturns
+    - revive
+    - varnamelen
+    - exhaustruct
+    - tagliatelle
+
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+
+run:
+  timeout: 5m
+  tests: false
