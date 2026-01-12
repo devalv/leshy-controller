@@ -40,3 +40,4 @@ config.yml
 
 # Build artifacts
 application
+l4_filter.o
