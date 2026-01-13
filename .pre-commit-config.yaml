@@ -16,3 +16,12 @@ repos:
       entry: make fmt
       language: system
       types: [go]
+  - repo: local
+    hooks:
+      - id: clang-format-docker
+        name: clang-format-docker
+        language: docker_image
+        entry: devalv/clang-format-15:0.1.0
+        args: ["-r", /src/cbpf]
+        files: ^cbpf/.*\.c$
+        pass_filenames: false

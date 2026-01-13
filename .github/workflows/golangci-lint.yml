@@ -1,5 +1,11 @@
 name: golangci-lint
-on: [pull_request]
+on:
+  pull_request:
+    paths:
+      - 'cmd/**'
+      - 'internal/**'
+      - '*.yml'
+      - '*.yaml'
 
 permissions:
   contents: read
