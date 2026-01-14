@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 #include <linux/bpf.h>
-#include <bpf/bpf_helpers.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
+#include <bpf/bpf_helpers.h>
 
 // Определяем константы
 #ifndef IPPROTO_TCP
@@ -22,29 +22,31 @@
 #define TCP_ACK 0x10
 #endif
 
-
 // Ключ для 5-tuple (IPv4)
 // Все поля в network byte order (big-endian), как в сетевых заголовках
-struct flow5_key {
-    __u32 saddr;  // IP источника (network byte order)
-    __u32 daddr;  // IP назначения (network byte order)
-    __u16 sport;  // порт источника (network byte order)
-    __u16 dport;  // порт назначения (network byte order)
-    __u8  proto;
-    __u8  pad1;
+struct flow5_key
+{
+    __u32 saddr; // IP источника (network byte order)
+    __u32 daddr; // IP назначения (network byte order)
+    __u16 sport; // порт источника (network byte order)
+    __u16 dport; // порт назначения (network byte order)
+    __u8 proto;
+    __u8 pad1;
     __u16 pad2;
 };
 
 // Ключ для авторизации по IP+порт
 // Все поля в network byte order (big-endian), как в сетевых заголовках
-struct ip_port_key {
-    __u32 saddr;    // IP источника (network byte order)
-    __u16 dport;    // порт назначения (network byte order)
+struct ip_port_key
+{
+    __u32 saddr; // IP источника (network byte order)
+    __u16 dport; // порт назначения (network byte order)
     __u16 pad;
 };
 
 // Карта активных потоков
-struct {
+struct
+{
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, 32768);
     __type(key, struct flow5_key);
@@ -55,25 +57,28 @@ struct {
 // Ожидающие handshake по IP источника + порт назначения
 // ВАЖНО: используем байтовый массив для ключа вместо структуры
 // Это гарантирует, что порядок байт не будет конвертироваться ядром
-struct {
+struct
+{
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 65536);
-    __type(key, __u8[8]);  // байтовый массив из 8 байт вместо структуры
+    __type(key, __u8[8]); // байтовый массив из 8 байт вместо структуры
     __type(value, __u64);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } rdp_pending_src SEC(".maps");
 
 // Конфигурация защищенных портов
-struct {
+struct
+{
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 256);
-    __type(key, __u16);  // порт в сетевом порядке байт
+    __type(key, __u16); // порт в сетевом порядке байт
     __type(value, __u8);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } rdp_guarded_ports SEC(".maps");
 
 // Статистика
-struct stats_val {
+struct stats_val
+{
     __u64 allowed;
     __u64 dropped;
     __u64 syn_allowed;
@@ -88,13 +93,14 @@ struct stats_val {
     __u64 port_3389_found_in_map;     // диагностика: порт 3389 найден в карте
     __u64 pending_lookup_failed;      // диагностика: lookup в pending map не нашел запись
     __u64 pending_lookup_success;     // диагностика: lookup в pending map нашел запись
-    __u64 last_pending_key_saddr;    // диагностика: последний saddr, использованный для lookup
-    __u64 last_pending_key_dport;    // диагностика: последний dport, использованный для lookup
-    __u64 last_pending_key_pad;      // диагностика: последний pad, использованный для lookup
-    __u64 lookup_key_bytes_0_3;      // диагностика: первые 4 байта lookup_key (для сравнения)
-    __u64 lookup_key_bytes_4_7;      // диагностика: последние 4 байта lookup_key (для сравнения)
+    __u64 last_pending_key_saddr; // диагностика: последний saddr, использованный для lookup
+    __u64 last_pending_key_dport; // диагностика: последний dport, использованный для lookup
+    __u64 last_pending_key_pad; // диагностика: последний pad, использованный для lookup
+    __u64 lookup_key_bytes_0_3; // диагностика: первые 4 байта lookup_key (для сравнения)
+    __u64 lookup_key_bytes_4_7; // диагностика: последние 4 байта lookup_key (для сравнения)
 };
-struct {
+struct
+{
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
     __type(key, __u32);
@@ -103,7 +109,8 @@ struct {
 } rdp_stats SEC(".maps");
 
 // События для логирования и отладки
-struct log_event {
+struct log_event
+{
     __u32 saddr;
     __u32 daddr;
     __u16 sport;
@@ -115,13 +122,15 @@ struct log_event {
 };
 
 // Дополнительная структура для диагностики ключей pending map
-struct pending_key_debug {
+struct pending_key_debug
+{
     __u32 saddr;
     __u16 dport;
     __u16 pad;
 };
 
-struct {
+struct
+{
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 64 * 1024);
 } rdp_logs SEC(".maps");
@@ -138,64 +147,74 @@ struct {
 #define EVENT_NON_GUARDED_PORT 9
 #define EVENT_GUARDED_PORT_DROPPED 10
 
-static __always_inline int update_stats(__u32 idx, int allow, int stat_type) {
-    struct stats_val *s = bpf_map_lookup_elem(&rdp_stats, &idx);
-    if (!s) return 0;
+static __always_inline int
+update_stats(__u32 idx, int allow, int stat_type)
+{
+    struct stats_val* s = bpf_map_lookup_elem(&rdp_stats, &idx);
+    if (!s)
+        return 0;
 
     switch (stat_type) {
-        case 0: // общее разрешение/блокировка
-            if (allow) __sync_fetch_and_add(&s->allowed, 1);
-            else __sync_fetch_and_add(&s->dropped, 1);
-            break;
-        case 1: // разрешение/блокировка SYN
-            if (allow) __sync_fetch_and_add(&s->syn_allowed, 1);
-            else __sync_fetch_and_add(&s->syn_dropped, 1);
-            break;
-        case 2: // попадание в активный поток
-            __sync_fetch_and_add(&s->active_flow_hits, 1);
-            break;
-        case 3: // повышение из pending
-            __sync_fetch_and_add(&s->pending_promotions, 1);
-            break;
-        case 6: // очистка истекших pending
-            __sync_fetch_and_add(&s->pending_expired_cleanups, 1);
-            break;
-        case 7: // попадание авторизации IP+порт
-            __sync_fetch_and_add(&s->ip_port_auth_hits, 1);
-            break;
-        case 8: // разрешен незащищенный порт
-            __sync_fetch_and_add(&s->non_guarded_port_allowed, 1);
-            break;
-        case 9: // заблокирован защищенный порт
-            __sync_fetch_and_add(&s->guarded_port_dropped, 1);
-            break;
-        case 10: // диагностика: порт 3389 не найден в карте
-            __sync_fetch_and_add(&s->port_3389_not_found_in_map, 1);
-            break;
-        case 11: // диагностика: порт 3389 найден в карте
-            __sync_fetch_and_add(&s->port_3389_found_in_map, 1);
-            break;
-        case 12: // диагностика: lookup в pending map не нашел запись
-            __sync_fetch_and_add(&s->pending_lookup_failed, 1);
-            break;
-        case 13: // диагностика: lookup в pending map нашел запись
-            __sync_fetch_and_add(&s->pending_lookup_success, 1);
-            break;
-        case 14: // диагностика: сохранить saddr ключа для pending lookup
-            // Используем allowed как временное хранилище для saddr
-            // (это не идеально, но для диагностики сойдет)
-            break;
-        case 15: // диагностика: сохранить dport ключа для pending lookup
-            // Используем dropped как временное хранилище для dport
-            // (это не идеально, но для диагностики сойдет)
-            break;
+    case 0: // общее разрешение/блокировка
+        if (allow)
+            __sync_fetch_and_add(&s->allowed, 1);
+        else
+            __sync_fetch_and_add(&s->dropped, 1);
+        break;
+    case 1: // разрешение/блокировка SYN
+        if (allow)
+            __sync_fetch_and_add(&s->syn_allowed, 1);
+        else
+            __sync_fetch_and_add(&s->syn_dropped, 1);
+        break;
+    case 2: // попадание в активный поток
+        __sync_fetch_and_add(&s->active_flow_hits, 1);
+        break;
+    case 3: // повышение из pending
+        __sync_fetch_and_add(&s->pending_promotions, 1);
+        break;
+    case 6: // очистка истекших pending
+        __sync_fetch_and_add(&s->pending_expired_cleanups, 1);
+        break;
+    case 7: // попадание авторизации IP+порт
+        __sync_fetch_and_add(&s->ip_port_auth_hits, 1);
+        break;
+    case 8: // разрешен незащищенный порт
+        __sync_fetch_and_add(&s->non_guarded_port_allowed, 1);
+        break;
+    case 9: // заблокирован защищенный порт
+        __sync_fetch_and_add(&s->guarded_port_dropped, 1);
+        break;
+    case 10: // диагностика: порт 3389 не найден в карте
+        __sync_fetch_and_add(&s->port_3389_not_found_in_map, 1);
+        break;
+    case 11: // диагностика: порт 3389 найден в карте
+        __sync_fetch_and_add(&s->port_3389_found_in_map, 1);
+        break;
+    case 12: // диагностика: lookup в pending map не нашел запись
+        __sync_fetch_and_add(&s->pending_lookup_failed, 1);
+        break;
+    case 13: // диагностика: lookup в pending map нашел запись
+        __sync_fetch_and_add(&s->pending_lookup_success, 1);
+        break;
+    case 14: // диагностика: сохранить saddr ключа для pending lookup
+        // Используем allowed как временное хранилище для saddr
+        // (это не идеально, но для диагностики сойдет)
+        break;
+    case 15: // диагностика: сохранить dport ключа для pending lookup
+        // Используем dropped как временное хранилище для dport
+        // (это не идеально, но для диагностики сойдет)
+        break;
     }
     return 0;
 }
 
-static __always_inline void log_event(struct flow5_key *k, __u8 tcp_flags, __u8 event_type, __u8 result) {
-    struct log_event *event = bpf_ringbuf_reserve(&rdp_logs, sizeof(struct log_event), 0);
-    if (!event) return;
+static __always_inline void
+log_event(struct flow5_key* k, __u8 tcp_flags, __u8 event_type, __u8 result)
+{
+    struct log_event* event = bpf_ringbuf_reserve(&rdp_logs, sizeof(struct log_event), 0);
+    if (!event)
+        return;
 
     event->saddr = k->saddr;
     event->daddr = k->daddr;
@@ -209,20 +228,27 @@ static __always_inline void log_event(struct flow5_key *k, __u8 tcp_flags, __u8 
     bpf_ringbuf_submit(event, 0);
 }
 
-static __always_inline int is_expired(__u64 *expiry_ns) {
-    if (!expiry_ns) return 1;
+static __always_inline int
+is_expired(__u64* expiry_ns)
+{
+    if (!expiry_ns)
+        return 1;
     __u64 now = bpf_ktime_get_ns();
     return now > *expiry_ns;
 }
 
-static __always_inline __u8 get_tcp_flags(struct tcphdr *tcph) {
-    return *(__u8 *)tcph & 0x3F;
+static __always_inline __u8
+get_tcp_flags(struct tcphdr* tcph)
+{
+    return *(__u8*)tcph & 0x3F;
 }
 
 // Функция is_port_guarded удалена - используем прямой lookup для всех портов
 
 // Отправка RST пакета путем модификации входящего SYN и перенаправления обратно
-static __always_inline int send_rst(struct __sk_buff *skb, struct iphdr *iph, struct tcphdr *tcph) {
+static __always_inline int
+send_rst(struct __sk_buff* skb, struct iphdr* iph, struct tcphdr* tcph)
+{
     // Отправляем RST только для SYN пакетов
     if (!(get_tcp_flags(tcph) & TCP_SYN)) {
         return BPF_DROP;
@@ -241,7 +267,7 @@ static __always_inline int send_rst(struct __sk_buff *skb, struct iphdr *iph, st
     // Устанавливаем флаги RST+ACK
     // TCP флаги находятся в байте 13 заголовка TCP (смещение от начала tcph)
     // Очищаем все флаги и устанавливаем RST и ACK
-    __u8 *flags_byte = (__u8 *)tcph + 13;
+    __u8* flags_byte = (__u8*)tcph + 13;
     *flags_byte = 0; // Сначала очищаем все флаги
     *flags_byte = TCP_RST | TCP_ACK;
 
@@ -269,12 +295,14 @@ static __always_inline int send_rst(struct __sk_buff *skb, struct iphdr *iph, st
 }
 
 SEC("tc")
-int rdp_filter(struct __sk_buff *skb) {
-    void *data = (void *)(long)skb->data;
-    void *data_end = (void *)(long)skb->data_end;
+int
+rdp_filter(struct __sk_buff* skb)
+{
+    void* data = (void*)(long)skb->data;
+    void* data_end = (void*)(long)skb->data_end;
 
-    struct ethhdr *eth = data;
-    if ((void *)(eth + 1) > data_end) {
+    struct ethhdr* eth = data;
+    if ((void*)(eth + 1) > data_end) {
         return BPF_OK;
     }
 
@@ -282,8 +310,8 @@ int rdp_filter(struct __sk_buff *skb) {
         return BPF_OK;
     }
 
-    struct iphdr *iph = (void *)(eth + 1);
-    if ((void *)(iph + 1) > data_end) {
+    struct iphdr* iph = (void*)(eth + 1);
+    if ((void*)(iph + 1) > data_end) {
         return BPF_OK;
     }
 
@@ -296,16 +324,16 @@ int rdp_filter(struct __sk_buff *skb) {
         return BPF_OK;
     }
 
-    struct tcphdr *tcph = (void *)((void *)iph + ihl);
-    if ((void *)(tcph + 1) > data_end) {
+    struct tcphdr* tcph = (void*)((void*)iph + ihl);
+    if ((void*)(tcph + 1) > data_end) {
         return BPF_OK;
     }
 
     // Строим ключ 5-tuple
     // IP адреса и порты в заголовках уже в network byte order (big-endian)
     struct flow5_key k = {};
-    k.saddr = iph->saddr;  // IP источника (network byte order)
-    k.daddr = iph->daddr;  // IP назначения (network byte order)
+    k.saddr = iph->saddr;   // IP источника (network byte order)
+    k.daddr = iph->daddr;   // IP назначения (network byte order)
     k.sport = tcph->source; // порт источника (network byte order)
     k.dport = tcph->dest;   // порт назначения (network byte order)
     k.proto = IPPROTO_TCP;
@@ -315,7 +343,7 @@ int rdp_filter(struct __sk_buff *skb) {
 
     // Проверяем, защищен ли порт назначения
     // ВАЖНО: делаем lookup один раз и используем результат везде
-    __u8 *guarded_port_value = bpf_map_lookup_elem(&rdp_guarded_ports, &dest_port);
+    __u8* guarded_port_value = bpf_map_lookup_elem(&rdp_guarded_ports, &dest_port);
     int port_guarded = (guarded_port_value != NULL);
 
     // ДИАГНОСТИКА: для порта 3389 логируем результат
@@ -340,7 +368,7 @@ int rdp_filter(struct __sk_buff *skb) {
     log_event(&k, tcp_flags, EVENT_SYN_RECEIVED, 0);
 
     // Сначала проверяем активный поток
-    __u64 *active_exp = bpf_map_lookup_elem(&rdp_active_flows, &k);
+    __u64* active_exp = bpf_map_lookup_elem(&rdp_active_flows, &k);
     if (active_exp && !is_expired(active_exp)) {
         // Обновляем срок действия при трафике
         __u64 now = bpf_ktime_get_ns();
@@ -362,12 +390,12 @@ int rdp_filter(struct __sk_buff *skb) {
     // ВАЖНО: записываем байты напрямую из заголовков пакетов
     // IP источника и порт назначения уже в network byte order (big-endian) из заголовков
     // Используем прямое присваивание через указатели для IP (4 байта - безопасно)
-    *((__u32 *)&lookup_key[0]) = iph->saddr;  // IP источника (network byte order)
+    *((__u32*)&lookup_key[0]) = iph->saddr; // IP источника (network byte order)
 
     // ВАЖНО: для порта записываем байты напрямую, чтобы гарантировать network byte order
     // dest_port уже в network byte order (big-endian), но присваивание через указатель
     // может конвертировать порядок байт, поэтому записываем байты напрямую
-    lookup_key[4] = (dest_port >> 8) & 0xFF;  // старший байт порта
+    lookup_key[4] = (dest_port >> 8) & 0xFF; // старший байт порта
     lookup_key[5] = dest_port & 0xFF;        // младший байт порта
 
     // pad уже инициализирован нулем через {0}
@@ -375,32 +403,32 @@ int rdp_filter(struct __sk_buff *skb) {
     // ДИАГНОСТИКА: для порта 3389 сохраняем ключ ДО lookup
     // Сохраняем байты ключа для сравнения с записанным ключом
     if (dest_port == __constant_htons(3389)) {
-        struct stats_val *s = bpf_map_lookup_elem(&rdp_stats, &(__u32){0});
+        struct stats_val* s = bpf_map_lookup_elem(&rdp_stats, &(__u32){0});
         if (s) {
             // Сохраняем IP и порт для диагностики
-            s->last_pending_key_saddr = *((__u32 *)&lookup_key[0]);
-            s->last_pending_key_dport = *((__u16 *)&lookup_key[4]);
-            s->last_pending_key_pad = *((__u16 *)&lookup_key[6]);
+            s->last_pending_key_saddr = *((__u32*)&lookup_key[0]);
+            s->last_pending_key_dport = *((__u16*)&lookup_key[4]);
+            s->last_pending_key_pad = *((__u16*)&lookup_key[6]);
 
             // ДИАГНОСТИКА: сохраняем байты ключа напрямую для сравнения
             // Это поможет понять, правильно ли формируется ключ
-            s->lookup_key_bytes_0_3 = *((__u32 *)&lookup_key[0]);
-            s->lookup_key_bytes_4_7 = *((__u32 *)&lookup_key[4]);
+            s->lookup_key_bytes_0_3 = *((__u32*)&lookup_key[0]);
+            s->lookup_key_bytes_4_7 = *((__u32*)&lookup_key[4]);
         }
     }
 
     // Используем байтовый массив для lookup
-    __u64 *pending_exp = bpf_map_lookup_elem(&rdp_pending_src, &lookup_key);
+    __u64* pending_exp = bpf_map_lookup_elem(&rdp_pending_src, &lookup_key);
 
     // ДИАГНОСТИКА: для порта 3389 проверяем результат поиска и сохраняем ключ
     if (dest_port == __constant_htons(3389)) {
         // Сохраняем ключ, который мы используем для поиска, в статистику
         // Это поможет понять, почему ключи не совпадают
-        struct stats_val *s = bpf_map_lookup_elem(&rdp_stats, &(__u32){0});
+        struct stats_val* s = bpf_map_lookup_elem(&rdp_stats, &(__u32){0});
         if (s) {
-            s->last_pending_key_saddr = *((__u32 *)&lookup_key[0]);
-            s->last_pending_key_dport = *((__u16 *)&lookup_key[4]);
-            s->last_pending_key_pad = *((__u16 *)&lookup_key[6]);
+            s->last_pending_key_saddr = *((__u32*)&lookup_key[0]);
+            s->last_pending_key_dport = *((__u16*)&lookup_key[4]);
+            s->last_pending_key_pad = *((__u16*)&lookup_key[6]);
         }
 
         // Логируем ключ для диагностики
