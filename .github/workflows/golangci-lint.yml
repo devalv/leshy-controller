@@ -4,8 +4,9 @@ on:
     paths:
       - 'cmd/**'
       - 'internal/**'
-      - '*.yml'
-      - '*.yaml'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
 
 permissions:
   contents: read
