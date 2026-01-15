@@ -13,7 +13,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build a Docker image
-        run: cd devops/docker/bpf && docker build -t local-image:latest -f Dockerfile.astra184 .
+        run: cd devops/docker/сbpf && docker build -t local-image:latest -f Dockerfile.astra184 .
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
