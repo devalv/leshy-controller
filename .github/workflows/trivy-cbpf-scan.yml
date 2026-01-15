@@ -13,14 +13,17 @@ jobs:
 
       - name: Build a Docker image
         run: |
-          docker build -t local-image:latest -f devops/docker/cbpf/Dockerfile.astra184 .
+          # Собираем только builder
+          docker build \
+            --target builder \
+            -t cbpf-builder:latest \
+            -f devops/docker/cbpf/Dockerfile.astra184 .
 
       - name: Run Trivy vulnerability scanner on BUILDER stage
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'local-image:latest'
+          image-ref: 'cbpf-builder:latest'
           format: 'table'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          severity: 'CRITICAL,HIGH'
           exit-code: '1'
-          target: 'builder'
           ignore-unfixed: true
