@@ -14,8 +14,7 @@ jobs:
 
       - name: Build a Docker image
         run: |
-          cd devops/docker/cbpf
-          docker build -t local-image:latest -f Dockerfile.astra184 .
+          docker build -t local-image:latest -f devops/docker/cbpf/Dockerfile.astra184 .
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
