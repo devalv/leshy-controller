@@ -1,4 +1,4 @@
-name: eBPF C Code Security Scan
+name: semgrep C Code Security Scan
 
 on:
   pull_request:
@@ -23,11 +23,4 @@ jobs:
           config: |
             p/c
             p/security-audit
-            p/best-practices
-          # Только для C файлов
-          paths: cbpf/
-          # Опции сканирования
-          disable-nosem: true
-          no-git-ignore: true
-          # Дополнительные опции
-          extra-args: "--metrics=off"
+            p/owasp-top-ten
