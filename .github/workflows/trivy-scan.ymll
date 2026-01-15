@@ -1,0 +1,30 @@
+name: Trivy scan
+on: [pull_request]
+
+jobs:
+  build_and_scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # Required to upload results to the Security tab
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build a Docker image
+        run: cd devops/docker/bpf && docker build -t local-image:latest -f Dockerfile.astra184 .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'local-image:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '1' # Fails the job if HIGH or CRITICAL vulnerabilities are found
+
+      - name: Upload Trivy scan results to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
