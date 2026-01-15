@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 registry.astralinux.ru/library/astra/ubi18:1.8.4 as builder
+FROM registry.astralinux.ru/library/astra/ubi18:1.8.4 AS builder
 
 # Установка зависимостей сборки
 RUN set -e && \
@@ -14,7 +14,7 @@ COPY cbpf/l4_filter.c cbpf/Makefile ./
 RUN make
 
 # Сохраняем артефакты
-FROM --platform=linux/amd64 scratch
+FROM scratch
 COPY --from=builder /cbpf/l4_filter.o /l4_filter.o
 # Фиктивная команда, которая завершится сразу
 CMD ["/dev/null"]

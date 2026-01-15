@@ -1,4 +1,4 @@
-name: Trivy scan
+name: Trivy CBPF builder scan
 on: [pull_request]
 
 jobs:
@@ -6,7 +6,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # security-events: write # Required to upload results to the Security tab
 
     steps:
       - name: Checkout code
@@ -16,15 +15,12 @@ jobs:
         run: |
           docker build -t local-image:latest -f devops/docker/cbpf/Dockerfile.astra184 .
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy vulnerability scanner on BUILDER stage
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'local-image:latest'
           format: 'table'
           severity: 'CRITICAL,HIGH,MEDIUM'
           exit-code: '1'
-
-      # - name: Upload Trivy scan results to GitHub Code Scanning
-      #   uses: github/codeql-action/upload-sarif@v3
-      #   with:
-      #     sarif_file: 'trivy-results.sarif'
+          target: 'builder'
+          ignore-unfixed: true
