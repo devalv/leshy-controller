@@ -13,7 +13,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Hadolint
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: "**/Dockerfile*"
+      - name: Find and lint Dockerfiles
+        run: |
+          # Находим все Dockerfile* файлы
+          find . -type f -name "Dockerfile*" ! -path "./.git/*" | while read file; do
+            echo "=== Linting $file ==="
+            docker run --rm -i hadolint/hadolint < "$file"
+          done
