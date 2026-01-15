@@ -3,7 +3,7 @@ FROM registry.astralinux.ru/library/astra/ubi18:1.8.4 AS builder
 # Установка зависимостей сборки
 RUN set -e && \
     apt-get update || exit 1 && \
-    apt-get install -y -q \
+    apt-get install -y -q --no-install-recommends \
     make clang libbpf-dev llvm || exit 1 && \
     rm -rf /var/lib/apt/lists/*
 
