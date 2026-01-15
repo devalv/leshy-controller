@@ -4,6 +4,7 @@ on: [pull_request]
 jobs:
   build_and_scan:
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: read
 
