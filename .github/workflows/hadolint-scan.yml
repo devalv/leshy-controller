@@ -1,0 +1,21 @@
+name: Hadolint Dockerfile scan
+
+on: [pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  hadolint:
+    name: Run Hadolint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: |
+            "**/Dockerfile"
+            "**/Dockerfile.*"

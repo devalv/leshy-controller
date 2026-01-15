@@ -1,12 +1,14 @@
 name: Trivy CBPF builder scan
+
 on: [pull_request]
+
+permissions:
+  contents: read
 
 jobs:
   build_and_scan:
     runs-on: ubuntu-latest
     continue-on-error: true
-    permissions:
-      contents: read
 
     steps:
       - name: Checkout code

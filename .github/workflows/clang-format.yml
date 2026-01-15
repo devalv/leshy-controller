@@ -21,5 +21,4 @@ jobs:
 
       - name: Check clang-format
         run: |
-          # Проверяем форматирование всех C файлов в cbpf/
           python3 /usr/bin/run-clang-format.py -r cbpf
