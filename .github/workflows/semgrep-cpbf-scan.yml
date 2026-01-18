@@ -1,0 +1,26 @@
+name: semgrep C Code Security Scan
+
+on:
+  pull_request:
+    paths:
+      - 'cbpf/**'
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep-sast:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Semgrep SAST Scan
+        id: semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          # Несколько наборов правил
+          config: |
+            p/c
+            p/security-audit
+            p/owasp-top-ten

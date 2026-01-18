@@ -1,0 +1,22 @@
+name: Hadolint Dockerfile scan
+
+on: [pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  hadolint:
+    name: Run Hadolint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Find and lint Dockerfiles
+        run: |
+          # Находим все Dockerfile* файлы
+          find . -type f -name "Dockerfile*" ! -path "./.git/*" | while read file; do
+            echo "=== Linting $file ==="
+            docker run --rm -i hadolint/hadolint < "$file"
+          done

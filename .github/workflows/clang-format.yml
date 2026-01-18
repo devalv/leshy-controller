@@ -1,0 +1,25 @@
+name: clang-format-check
+
+on:
+  pull_request:
+    paths:
+      - 'cbpf/**'
+      - '.clang-format'
+
+permissions:
+  contents: read
+
+jobs:
+  clang-format:
+    name: Check C code formatting
+    runs-on: ubuntu-latest
+    container: devalv/clang-format-15:0.1.0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check clang-format
+        run: |
+          python3 /usr/bin/run-clang-format.py -r cbpf
