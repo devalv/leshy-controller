@@ -1,0 +1,43 @@
+name: Build cBPF artifact
+on:
+  release:
+    types: [created]
+
+  # Ручной запуск из интерфейса GitHub
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Для загрузки артефактов в релиз
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Полная история для тегов
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image and extract artifact
+      run: |
+        chmod +x ${{ github.workspace }}/devops/build.sh
+        ${{ github.workspace }}/devops/build.sh
+
+    - name: Upload artifact to GitHub Releases (if triggered by release)
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ./l4_filter.o
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload artifact as workflow artifact (for manual runs)
+      if: github.event_name != 'release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: l4_filter
+        path: ./l4_filter.o
+        retention-days: 7

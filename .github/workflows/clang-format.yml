@@ -1,4 +1,5 @@
 name: clang-format-check
+
 on:
   pull_request:
     paths:
