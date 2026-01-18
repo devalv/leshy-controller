@@ -46,8 +46,6 @@ struct
 } rdp_active_flows SEC(".maps");
 
 // Ожидающие handshake по IP источника + порт назначения
-// ВАЖНО: используем байтовый массив для ключа вместо структуры
-// Это гарантирует, что порядок байт не будет конвертироваться ядром
 struct
 {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -80,15 +78,6 @@ struct stats_val
     __u64 ip_port_auth_hits;
     __u64 non_guarded_port_allowed;
     __u64 guarded_port_dropped;
-    __u64 port_3389_not_found_in_map; // диагностика: порт 3389 не найден в карте
-    __u64 port_3389_found_in_map;     // диагностика: порт 3389 найден в карте
-    __u64 pending_lookup_failed;      // диагностика: lookup в pending map не нашел запись
-    __u64 pending_lookup_success;     // диагностика: lookup в pending map нашел запись
-    __u64 last_pending_key_saddr; // диагностика: последний saddr, использованный для lookup
-    __u64 last_pending_key_dport; // диагностика: последний dport, использованный для lookup
-    __u64 last_pending_key_pad; // диагностика: последний pad, использованный для lookup
-    __u64 lookup_key_bytes_0_3; // диагностика: первые 4 байта lookup_key (для сравнения)
-    __u64 lookup_key_bytes_4_7; // диагностика: последние 4 байта lookup_key (для сравнения)
 };
 struct
 {
@@ -112,6 +101,7 @@ struct log_event
     __u32 pad;
 };
 
+// Мапа для чтения rdp_logs из ringbuf при помощи bpftool (расширенная отладка)
 struct
 {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -121,14 +111,24 @@ struct
 // Временные константы
 #define ACTIVE_ALLOW_NS ((__u64)300 * 1000000000ULL)
 
-// Типы событий
-#define EVENT_SYN_RECEIVED 0
-#define EVENT_ACTIVE_FLOW 1
-#define EVENT_PENDING_PROMOTION 2
-#define EVENT_PENDING_EXPIRED 7
-#define EVENT_IP_PORT_AUTH 8
-#define EVENT_NON_GUARDED_PORT 9
-#define EVENT_GUARDED_PORT_DROPPED 10
+// Константы для update_stats (статистика)
+#define STAT_ALLOW_DENY 0            // общее разрешение/блокировка
+#define STAT_SYN_ALLOW_DENY 1        // разрешение/блокировка SYN
+#define STAT_ACTIVE_FLOW_HIT 2       // попадание в активный поток
+#define STAT_PENDING_PROMOTION 3     // повышение из pending
+#define STAT_PENDING_EXPIRED_CLEAN 6 // очистка истекших pending
+#define STAT_IP_PORT_AUTH_HIT 7      // попадание авторизации IP+порт
+#define STAT_NON_GUARDED_PORT 8      // разрешен незащищенный порт
+#define STAT_GUARDED_PORT_DENIED 9   // заблокирован защищенный порт
+
+// Константы для log_event (логирование)
+#define LOG_SYN_RECEIVED 100         // Получен SYN на защищенный порт
+#define LOG_ACTIVE_FLOW 101          // Попадание в активный поток
+#define LOG_PENDING_PROMOTION 102    // Повышение из pending в active
+#define LOG_PENDING_EXPIRED 103      // Истекшая pending запись
+#define LOG_IP_PORT_AUTH 104         // Авторизация по IP+порт
+#define LOG_NON_GUARDED_PORT 105     // Доступ к незащищенному порту
+#define LOG_GUARDED_PORT_DROPPED 106 // Блокировка защищенного порта
 
 static __always_inline int
 update_stats(__u32 idx, int allow, int stat_type)
@@ -138,52 +138,41 @@ update_stats(__u32 idx, int allow, int stat_type)
         return 0;
 
     switch (stat_type) {
-    case 0: // общее разрешение/блокировка
+    case STAT_ALLOW_DENY:
         if (allow)
             __sync_fetch_and_add(&s->allowed, 1);
         else
             __sync_fetch_and_add(&s->dropped, 1);
         break;
-    case 1: // разрешение/блокировка SYN
+    case STAT_SYN_ALLOW_DENY:
         if (allow)
             __sync_fetch_and_add(&s->syn_allowed, 1);
         else
             __sync_fetch_and_add(&s->syn_dropped, 1);
         break;
-    case 2: // попадание в активный поток
+    case STAT_ACTIVE_FLOW_HIT:
         __sync_fetch_and_add(&s->active_flow_hits, 1);
         break;
-    case 3: // повышение из pending
+    case STAT_PENDING_PROMOTION:
         __sync_fetch_and_add(&s->pending_promotions, 1);
         break;
-    case 6: // очистка истекших pending
+    case STAT_PENDING_EXPIRED_CLEAN:
         __sync_fetch_and_add(&s->pending_expired_cleanups, 1);
         break;
-    case 7: // попадание авторизации IP+порт
+    case STAT_IP_PORT_AUTH_HIT:
         __sync_fetch_and_add(&s->ip_port_auth_hits, 1);
         break;
-    case 8: // разрешен незащищенный порт
+    case STAT_NON_GUARDED_PORT:
         __sync_fetch_and_add(&s->non_guarded_port_allowed, 1);
         break;
-    case 9: // заблокирован защищенный порт
+    case STAT_GUARDED_PORT_DENIED:
         __sync_fetch_and_add(&s->guarded_port_dropped, 1);
-        break;
-    case 10: // диагностика: порт 3389 не найден в карте
-        __sync_fetch_and_add(&s->port_3389_not_found_in_map, 1);
-        break;
-    case 11: // диагностика: порт 3389 найден в карте
-        __sync_fetch_and_add(&s->port_3389_found_in_map, 1);
-        break;
-    case 12: // диагностика: lookup в pending map не нашел запись
-        __sync_fetch_and_add(&s->pending_lookup_failed, 1);
-        break;
-    case 13: // диагностика: lookup в pending map нашел запись
-        __sync_fetch_and_add(&s->pending_lookup_success, 1);
         break;
     }
     return 0;
 }
 
+// Функция логгирования, для чтения из ringbuf при помощи bpftool (расширенная отладка)
 static __always_inline void
 log_event(struct flow5_key* k, __u8 tcp_flags, __u8 event_type, __u8 result)
 {
@@ -319,26 +308,15 @@ rdp_filter(struct __sk_buff* skb)
     __u8* guarded_port_value = bpf_map_lookup_elem(&rdp_guarded_ports, &dest_port);
     int port_guarded = (guarded_port_value != NULL);
 
-    // ДИАГНОСТИКА: для порта 3389 логируем результат
-    if (dest_port == __constant_htons(3389)) {
-        if (guarded_port_value == NULL) {
-            // Порт 3389 не найден в мапе - это проблема!
-            update_stats(0, 0, 10); // порт 3389 не найден в мапе
-        } else {
-            // Порт 3389 найден в мапе - это хорошо
-            update_stats(0, 0, 11); // порт 3389 найден в мапе
-        }
-    }
-
     if (!port_guarded) {
-        update_stats(0, 1, 0);
-        update_stats(0, 0, 8); // разрешен незащищенный порт
-        log_event(&k, tcp_flags, EVENT_NON_GUARDED_PORT, 1);
+        update_stats(0, 1, STAT_ALLOW_DENY);
+        update_stats(0, 0, STAT_NON_GUARDED_PORT); // разрешен незащищенный порт
+        log_event(&k, tcp_flags, LOG_NON_GUARDED_PORT, 1);
         return BPF_OK;
     }
 
     // ПОРТ ЗАЩИЩЕН - требуется авторизация
-    log_event(&k, tcp_flags, EVENT_SYN_RECEIVED, 0);
+    log_event(&k, tcp_flags, LOG_SYN_RECEIVED, 0);
 
     // Сначала проверяем активный поток
     __u64* active_exp = bpf_map_lookup_elem(&rdp_active_flows, &k);
@@ -348,15 +326,13 @@ rdp_filter(struct __sk_buff* skb)
         __u64 new_exp = now + ACTIVE_ALLOW_NS;
         bpf_map_update_elem(&rdp_active_flows, &k, &new_exp, BPF_ANY);
 
-        update_stats(0, 1, 0);
-        update_stats(0, 0, 2); // попадание в активный поток
-        log_event(&k, tcp_flags, EVENT_ACTIVE_FLOW, 1);
+        update_stats(0, 1, STAT_ALLOW_DENY);
+        update_stats(0, 0, STAT_ACTIVE_FLOW_HIT); // попадание в активный поток
+        log_event(&k, tcp_flags, LOG_ACTIVE_FLOW, 1);
         return BPF_OK;
     }
 
     // Проверяем pending по IP источника + порт назначения
-    // ПРОБЛЕМА: использование структуры может вызывать проблемы с порядком байт при lookup
-    // РЕШЕНИЕ: используем байтовый массив для lookup, чтобы гарантировать правильный порядок байт
     // IP адреса и порты уже в network byte order, используем напрямую
     __u8 lookup_key[8] = {0};
 
@@ -371,57 +347,12 @@ rdp_filter(struct __sk_buff* skb)
     lookup_key[4] = (dest_port >> 8) & 0xFF; // старший байт порта
     lookup_key[5] = dest_port & 0xFF;        // младший байт порта
 
-    // pad уже инициализирован нулем через {0}
-
-    // ДИАГНОСТИКА: для порта 3389 сохраняем ключ ДО lookup TODO: убрать?
-    // Сохраняем байты ключа для сравнения с записанным ключом TODO: убрать?
-    if (dest_port == __constant_htons(3389)) {
-        struct stats_val* s = bpf_map_lookup_elem(&rdp_stats, &(__u32){0});
-        if (s) {
-            // Сохраняем IP и порт для диагностики
-            s->last_pending_key_saddr = *((__u32*)&lookup_key[0]);
-            s->last_pending_key_dport = *((__u16*)&lookup_key[4]);
-            s->last_pending_key_pad = *((__u16*)&lookup_key[6]);
-
-            // ДИАГНОСТИКА: сохраняем байты ключа напрямую для сравнения
-            // Это поможет понять, правильно ли формируется ключ
-            s->lookup_key_bytes_0_3 = *((__u32*)&lookup_key[0]);
-            s->lookup_key_bytes_4_7 = *((__u32*)&lookup_key[4]);
-        }
-    }
-
     // Используем байтовый массив для lookup
     __u64* pending_exp = bpf_map_lookup_elem(&rdp_pending_src, &lookup_key);
-
-    // ДИАГНОСТИКА: для порта 3389 проверяем результат поиска и сохраняем ключ TODO: убрать?
-    if (dest_port == __constant_htons(3389)) { // TODO: убрать?
-        // Сохраняем ключ, который мы используем для поиска, в статистику
-        // Это поможет понять, почему ключи не совпадают
-        struct stats_val* s = bpf_map_lookup_elem(&rdp_stats, &(__u32){0});
-        if (s) {
-            s->last_pending_key_saddr = *((__u32*)&lookup_key[0]);
-            s->last_pending_key_dport = *((__u16*)&lookup_key[4]);
-            s->last_pending_key_pad = *((__u16*)&lookup_key[6]);
-        }
-
-        // Логируем ключ для диагностики
-        log_event(&k, tcp_flags, EVENT_IP_PORT_AUTH, 0);
-
-        if (pending_exp == NULL) {
-            // Запись не найдена в pending map - это проблема!
-            update_stats(0, 0, 12); // pending lookup failed
-            log_event(&k, tcp_flags, EVENT_PENDING_EXPIRED, 0);
-        } else {
-            // Запись найдена - логируем для диагностики
-            update_stats(0, 0, 13); // pending lookup success
-            log_event(&k, tcp_flags, EVENT_IP_PORT_AUTH, 1);
-        }
-    }
-
     if (pending_exp) {
         if (!is_expired(pending_exp)) {
             // IP+port авторизован и не истек
-            log_event(&k, tcp_flags, EVENT_IP_PORT_AUTH, 1);
+            log_event(&k, tcp_flags, LOG_IP_PORT_AUTH, 1);
 
             // Для SYN пакетов создаем активный флоу
             if (tcp_flags & TCP_SYN) {
@@ -429,8 +360,8 @@ rdp_filter(struct __sk_buff* skb)
                 __u64 new_active_exp = now + ACTIVE_ALLOW_NS;
                 bpf_map_update_elem(&rdp_active_flows, &k, &new_active_exp, BPF_ANY);
 
-                update_stats(0, 0, 3); // повышение из pending
-                log_event(&k, tcp_flags, EVENT_PENDING_PROMOTION, 1);
+                update_stats(0, 0, STAT_PENDING_PROMOTION); // повышение из pending
+                log_event(&k, tcp_flags, LOG_PENDING_PROMOTION, 1);
             } else {
                 // Для не-SYN пакетов (уже установленное соединение) также создаем active flow
                 // Это нужно для случаев, когда соединение было установлено до добавления в pending
@@ -439,25 +370,25 @@ rdp_filter(struct __sk_buff* skb)
                 bpf_map_update_elem(&rdp_active_flows, &k, &new_active_exp, BPF_ANY);
             }
 
-            update_stats(0, 1, 0);
-            update_stats(0, 0, 7); // попадание авторизации IP+порт
+            update_stats(0, 1, STAT_ALLOW_DENY);
+            update_stats(0, 0, STAT_IP_PORT_AUTH_HIT); // попадание авторизации IP+порт
             return BPF_OK;
         } else {
             // IP+порт истек - удаляем
             bpf_map_delete_elem(&rdp_pending_src, &lookup_key);
-            update_stats(0, 0, 6); // очистка истекших pending
-            log_event(&k, tcp_flags, EVENT_PENDING_EXPIRED, 0);
+            update_stats(0, 0, STAT_PENDING_EXPIRED_CLEAN); // очистка истекших pending
+            log_event(&k, tcp_flags, LOG_PENDING_EXPIRED, 0);
         }
     }
 
     // Если дошли сюда - пакет НЕ авторизован
-    update_stats(0, 0, 0); // общая блокировка
-    update_stats(0, 0, 9); // заблокирован защищенный порт
+    update_stats(0, 0, STAT_ALLOW_DENY);          // общая блокировка
+    update_stats(0, 0, STAT_GUARDED_PORT_DENIED); // заблокирован защищенный порт
 
     // Для SYN пакетов отправляем RST для быстрой реакции клиента
     if (tcp_flags & TCP_SYN) {
-        update_stats(0, 0, 1); // заблокирован SYN
-        log_event(&k, tcp_flags, EVENT_GUARDED_PORT_DROPPED, 0);
+        update_stats(0, 0, STAT_SYN_ALLOW_DENY); // заблокирован SYN
+        log_event(&k, tcp_flags, LOG_GUARDED_PORT_DROPPED, 0);
 
         // Отправляем RST пакет обратно клиенту
         int ret = send_rst(skb, iph, tcph);
@@ -467,7 +398,7 @@ rdp_filter(struct __sk_buff* skb)
         // Если перенаправление не удалось, продолжаем с блокировкой
     }
 
-    log_event(&k, tcp_flags, EVENT_GUARDED_PORT_DROPPED, 0);
+    log_event(&k, tcp_flags, LOG_GUARDED_PORT_DROPPED, 0);
     return BPF_DROP;
 }
 
