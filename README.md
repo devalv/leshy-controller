@@ -3,7 +3,14 @@
 [![semgrep C Code Security Scan](https://github.com/devalv/leshy-controller/actions/workflows/semgrep-cpbf-scan.yml/badge.svg)](https://github.com/devalv/leshy-controller/actions/workflows/semgrep-cpbf-scan.yml)
 [![Trivy CBPF builder scan](https://github.com/devalv/leshy-controller/actions/workflows/trivy-cbpf-scan.yml/badge.svg)](https://github.com/devalv/leshy-controller/actions/workflows/trivy-cbpf-scan.yml)
 
+# leshy-controller
 
+## Компоненты
+
+### bpf-фильтр
+См. [README](./cbpf/README.md)
+
+## Структура репозитория
 ```
 project/
 ├── cbpf/
@@ -23,7 +30,6 @@ project/
 │   ├── advanced/
 ├── docs/
 │   ├── architecture.md
-│   ├── development.md
 │   └── api/
 ├── .pre-commit-config.yaml    # Pre-commit хуки
 ├── .clang-format              # Форматирование C
