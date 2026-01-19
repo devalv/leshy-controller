@@ -258,7 +258,7 @@ send_rst(struct __sk_buff* skb, struct iphdr* iph, struct tcphdr* tcph)
 
 SEC("tc")
 int
-rdp_filter(struct __sk_buff* skb)
+l4_filter(struct __sk_buff* skb)
 {
     void* data = (void*)(long)skb->data;
     void* data_end = (void*)(long)skb->data_end;

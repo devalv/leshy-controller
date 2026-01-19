@@ -7,11 +7,11 @@ CFLAGS = -O2 -g -Wall -target bpf -D__TARGET_ARCH_x86 \
 
 all: l4_filter.o
 
-l4_filter.o: l4_filter.c
+filter/l4_filter.o: filter/l4_filter.c
 	$(BPF_CLANG) $(CFLAGS) -c $< -o $@
 	$(BPF_LLVM_STRIP) -g $@
 
 clean:
-	rm -f l4_filter.o
+	rm -f filter/l4_filter.o
 
 .PHONY: all clean
