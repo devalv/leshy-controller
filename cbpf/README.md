@@ -1,0 +1,31 @@
+# cbpf/l4-filter
+
+Добавляет bpf-правила для фильтрации трафика на основе пар IPv4:port
+
+## Установка и запуск для тестирования
+
+```bash
+sudo apt-get update
+sudo apt-get install -y clang llvm libelf-dev libz-dev linux-tools-common linux-tools-generic
+````
+
+```bash
+make
+```
+
+```bash
+chmod +x run_tests.sh
+sudo ./run_tests.sh
+```
+
+## Описание тестов
+
+* test_non_guarded_port - проверка пропуска пакетов на незащищенные порты
+* test_guarded_port_no_auth - проверка блокировки SYN пакетов на защищенные порты без авторизации
+* test_active_flow_hit - проверка пропуска трафика по активным флоу
+* test_pending_promotion - проверка авторизации через pending записи и создания активных флоу
+* test_expired_pending_cleanup - проверка очистки истекших pending записей
+* test_rst_generation - проверка генерации RST пакетов для заблокированных SYN
+
+## Сборка
+см. корневой [README.md](../README.md)

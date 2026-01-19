@@ -12,7 +12,7 @@ RUN set -e && \
 
 WORKDIR /cbpf
 
-COPY cbpf/l4_filter.c cbpf/Makefile ./
+COPY cbpf/filter cbpf/Makefile ./
 
 RUN make
 

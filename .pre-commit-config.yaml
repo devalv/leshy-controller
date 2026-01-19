@@ -9,6 +9,7 @@ repos:
       - id: check-added-large-files
         args: ["--maxkb=2000"]
       - id: mixed-line-ending
+
   - repo: local
     hooks:
     - id: advanced-fmt
@@ -16,6 +17,7 @@ repos:
       entry: make fmt
       language: system
       types: [go]
+
   - repo: local
     hooks:
       - id: clang-format-docker
@@ -25,3 +27,14 @@ repos:
         args: ["-r", /src/cbpf]
         files: ^cbpf/.*\.c$
         pass_filenames: false
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.35.0
+    hooks:
+      - id: markdownlint
+        args: ["--disable", "MD013"]
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
