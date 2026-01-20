@@ -11,7 +11,8 @@
 См. [README](./cbpf/README.md)
 
 ## Структура репозитория
-```
+
+```plaintext
 project/
 ├── cbpf/
 │   ├── filter/

@@ -1,0 +1,68 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" version="29.3.1">
+  <diagram name="Page-1" id="ndrq6V4ZY5aRUgjBLTI3">
+    <mxGraphModel dx="778" dy="1119" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="Ke7CCr60utAyysVLhnTq-9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="330" width="550" x="40" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-4" edge="1" parent="1" source="Ke7CCr60utAyysVLhnTq-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="250" y="210" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Controller" vertex="1">
+          <mxGeometry height="60" width="120" x="60" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-5" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="Ke7CCr60utAyysVLhnTq-3" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="370" y="210" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="linux kernel" vertex="1">
+          <mxGeometry height="60" width="120" x="440" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="remote host" vertex="1">
+          <mxGeometry height="60" width="120" x="660" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="cbpf" vertex="1">
+          <mxGeometry height="60" width="120" x="250" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-13" edge="1" parent="1" source="Ke7CCr60utAyysVLhnTq-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="Ke7CCr60utAyysVLhnTq-11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="client" vertex="1">
+          <mxGeometry height="60" width="120" x="60" y="460" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-14" edge="1" parent="1" source="Ke7CCr60utAyysVLhnTq-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="Ke7CCr60utAyysVLhnTq-12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-11" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="proxy gateway" vertex="1">
+          <mxGeometry height="60" width="120" x="250" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-15" edge="1" parent="1" source="Ke7CCr60utAyysVLhnTq-12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="Ke7CCr60utAyysVLhnTq-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-12" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="валидация подключения на основе cbpf-правил" vertex="1">
+          <mxGeometry height="60" width="120" x="440" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-17" edge="1" parent="1" source="Ke7CCr60utAyysVLhnTq-16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="Ke7CCr60utAyysVLhnTq-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="auth" vertex="1">
+          <mxGeometry height="60" width="120" x="60" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-19" edge="1" parent="1" source="Ke7CCr60utAyysVLhnTq-18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="Ke7CCr60utAyysVLhnTq-16">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="client" vertex="1">
+          <mxGeometry height="60" width="120" x="250" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-20" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="controller + proxy host" vertex="1">
+          <mxGeometry height="30" width="110" x="460" y="120" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
