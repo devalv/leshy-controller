@@ -43,7 +43,7 @@ struct
     __type(key, struct flow5_key);
     __type(value, __u64);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
-} rdp_active_flows SEC(".maps");
+} l4_active_flows SEC(".maps");
 
 // Ожидающие handshake по IP источника + порт назначения
 struct
@@ -53,7 +53,7 @@ struct
     __type(key, __u8[8]);
     __type(value, __u64);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
-} rdp_pending_src SEC(".maps");
+} l4_pending_src SEC(".maps");
 
 // Конфигурация защищенных портов
 struct
@@ -63,7 +63,7 @@ struct
     __type(key, __u16); // порт в сетевом порядке байт
     __type(value, __u8);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
-} rdp_guarded_ports SEC(".maps");
+} l4_guarded_ports SEC(".maps");
 
 // Статистика
 struct stats_val
@@ -86,7 +86,7 @@ struct
     __type(key, __u32);
     __type(value, struct stats_val);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
-} rdp_stats SEC(".maps");
+} l4_stats SEC(".maps");
 
 // События для логирования и отладки
 struct log_event
@@ -101,12 +101,12 @@ struct log_event
     __u32 pad;
 };
 
-// Мапа для чтения rdp_logs из ringbuf при помощи bpftool (расширенная отладка)
+// Мапа для чтения l4_logs из ringbuf при помощи bpftool (расширенная отладка)
 struct
 {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 64 * 1024);
-} rdp_logs SEC(".maps");
+} l4_logs SEC(".maps");
 
 // Временные константы
 #define ACTIVE_ALLOW_NS ((__u64)300 * 1000000000ULL)
@@ -133,7 +133,7 @@ struct
 static __always_inline int
 update_stats(__u32 idx, int allow, int stat_type)
 {
-    struct stats_val* s = bpf_map_lookup_elem(&rdp_stats, &idx);
+    struct stats_val* s = bpf_map_lookup_elem(&l4_stats, &idx);
     if (!s)
         return 0;
 
@@ -176,7 +176,7 @@ update_stats(__u32 idx, int allow, int stat_type)
 static __always_inline void
 log_event(struct flow5_key* k, __u8 tcp_flags, __u8 event_type, __u8 result)
 {
-    struct log_event* event = bpf_ringbuf_reserve(&rdp_logs, sizeof(struct log_event), 0);
+    struct log_event* event = bpf_ringbuf_reserve(&l4_logs, sizeof(struct log_event), 0);
     if (!event)
         return;
 
@@ -258,7 +258,7 @@ send_rst(struct __sk_buff* skb, struct iphdr* iph, struct tcphdr* tcph)
 
 SEC("tc")
 int
-rdp_filter(struct __sk_buff* skb)
+l4_filter(struct __sk_buff* skb)
 {
     void* data = (void*)(long)skb->data;
     void* data_end = (void*)(long)skb->data_end;
@@ -305,7 +305,7 @@ rdp_filter(struct __sk_buff* skb)
 
     // Проверяем, защищен ли порт назначения
     // ВАЖНО: делаем lookup один раз и используем результат везде
-    __u8* guarded_port_value = bpf_map_lookup_elem(&rdp_guarded_ports, &dest_port);
+    __u8* guarded_port_value = bpf_map_lookup_elem(&l4_guarded_ports, &dest_port);
     int port_guarded = (guarded_port_value != NULL);
 
     if (!port_guarded) {
@@ -319,12 +319,12 @@ rdp_filter(struct __sk_buff* skb)
     log_event(&k, tcp_flags, LOG_SYN_RECEIVED, 0);
 
     // Сначала проверяем активный поток
-    __u64* active_exp = bpf_map_lookup_elem(&rdp_active_flows, &k);
+    __u64* active_exp = bpf_map_lookup_elem(&l4_active_flows, &k);
     if (active_exp && !is_expired(active_exp)) {
         // Обновляем срок действия при трафике
         __u64 now = bpf_ktime_get_ns();
         __u64 new_exp = now + ACTIVE_ALLOW_NS;
-        bpf_map_update_elem(&rdp_active_flows, &k, &new_exp, BPF_ANY);
+        bpf_map_update_elem(&l4_active_flows, &k, &new_exp, BPF_ANY);
 
         update_stats(0, 1, STAT_ALLOW_DENY);
         update_stats(0, 0, STAT_ACTIVE_FLOW_HIT); // попадание в активный поток
@@ -348,7 +348,7 @@ rdp_filter(struct __sk_buff* skb)
     lookup_key[5] = dest_port & 0xFF;        // младший байт порта
 
     // Используем байтовый массив для lookup
-    __u64* pending_exp = bpf_map_lookup_elem(&rdp_pending_src, &lookup_key);
+    __u64* pending_exp = bpf_map_lookup_elem(&l4_pending_src, &lookup_key);
     if (pending_exp) {
         if (!is_expired(pending_exp)) {
             // IP+port авторизован и не истек
@@ -358,7 +358,7 @@ rdp_filter(struct __sk_buff* skb)
             if (tcp_flags & TCP_SYN) {
                 __u64 now = bpf_ktime_get_ns();
                 __u64 new_active_exp = now + ACTIVE_ALLOW_NS;
-                bpf_map_update_elem(&rdp_active_flows, &k, &new_active_exp, BPF_ANY);
+                bpf_map_update_elem(&l4_active_flows, &k, &new_active_exp, BPF_ANY);
 
                 update_stats(0, 0, STAT_PENDING_PROMOTION); // повышение из pending
                 log_event(&k, tcp_flags, LOG_PENDING_PROMOTION, 1);
@@ -367,7 +367,7 @@ rdp_filter(struct __sk_buff* skb)
                 // Это нужно для случаев, когда соединение было установлено до добавления в pending
                 __u64 now = bpf_ktime_get_ns();
                 __u64 new_active_exp = now + ACTIVE_ALLOW_NS;
-                bpf_map_update_elem(&rdp_active_flows, &k, &new_active_exp, BPF_ANY);
+                bpf_map_update_elem(&l4_active_flows, &k, &new_active_exp, BPF_ANY);
             }
 
             update_stats(0, 1, STAT_ALLOW_DENY);
@@ -375,7 +375,7 @@ rdp_filter(struct __sk_buff* skb)
             return BPF_OK;
         } else {
             // IP+порт истек - удаляем
-            bpf_map_delete_elem(&rdp_pending_src, &lookup_key);
+            bpf_map_delete_elem(&l4_pending_src, &lookup_key);
             update_stats(0, 0, STAT_PENDING_EXPIRED_CLEAN); // очистка истекших pending
             log_event(&k, tcp_flags, LOG_PENDING_EXPIRED, 0);
         }
