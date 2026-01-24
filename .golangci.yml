@@ -14,6 +14,7 @@ linters:
     - varnamelen
     - exhaustruct
     - tagliatelle
+    - godox
 
 formatters:
   enable:

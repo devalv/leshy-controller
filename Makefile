@@ -7,7 +7,7 @@ fmt:
 	gofmt -w -s ./cmd ./internal
 	gofumpt -w ./cmd ./internal
 	goimports -w ./cmd ./internal
-	golangci-lint run
+	golangci-lint run --fix
 
 test:
 	go test ./... -race
@@ -16,10 +16,13 @@ test:
 # 	go test ./... -race -cover
 
 build:
-	$(MAKE) fmt
-	go build -o application ./cmd/app
+#	$(MAKE) fmt
+	go env -w CGO_ENABLED=0
+	go env -w GOOS=linux
+	go env -w GOARCH=amd64
+	go build -o controller-app ./cmd
 
 run:
-	go run ./cmd/app --config ./config.yml
+	go run ./cmd --config ./config.yml
 
 .PHONY: setup fmt test build

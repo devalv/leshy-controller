@@ -21,15 +21,23 @@ project/
 │   ├── Makefile
 │   └── README.md
 ├── cmd/
-│   └── ... (Go код)
+│   └── ... (Go код с точкой входа в приложение)
 ├── internal/
+│   ├── app
+│   ├── config
+│   ├── interfaces
+│   │   ├──rest
+│   │   │  ├──v1
+│   │   ├──grpc?
 │   └── ... (Go код)
 ├── devops/
 │   └── ... (скрипты сборки)
-├── examples/
-│   ├── basic/
-│   ├── advanced/
+
 ├── docs/
+│   ├── examples/
+│   │   ├── basic.md
+│   │   ├── advanced/
+│   ├── cbpf/
 │   ├── architecture.md
 │   └── api/
 ├── .pre-commit-config.yaml    # Pre-commit хуки
