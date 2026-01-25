@@ -10,13 +10,21 @@ fmt:
 	golangci-lint run --fix
 
 test:
-	go test ./... -race
+	docker run --rm \
+		-v $(PWD):/app \
+		-w /app \
+		golang:1.25-alpine \
+		sh -c "go mod download && go test -v ./..."
 
-# cover:
-# 	go test ./... -race -cover
+cover:
+	docker run --rm \
+		-v $(PWD):/app \
+		-w /app \
+		golang:1.25-alpine \
+		sh -c "go mod download && go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out"
 
 build:
-#	$(MAKE) fmt
+	$(MAKE) fmt
 	go env -w CGO_ENABLED=0
 	go env -w GOOS=linux
 	go env -w GOARCH=amd64
@@ -24,5 +32,8 @@ build:
 
 run:
 	go run ./cmd --config ./config.yml
+
+clean:
+	docker system prune -f
 
 .PHONY: setup fmt test build
