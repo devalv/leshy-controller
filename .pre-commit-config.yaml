@@ -10,13 +10,13 @@ repos:
         args: ["--maxkb=2000"]
       - id: mixed-line-ending
 
-  # - repo: local
-  #   hooks:
-  #   - id: advanced-fmt
-  #     name: advanced-fmt
-  #     entry: make fmt
-  #     language: system
-  #     types: [go]
+  - repo: local
+    hooks:
+    - id: advanced-fmt
+      name: advanced-fmt
+      entry: make fmt
+      language: system
+      types: [go]
 
   - repo: local
     hooks:

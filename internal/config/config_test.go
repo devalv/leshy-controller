@@ -739,7 +739,6 @@ func TestConfigValidate(t *testing.T) {
 
 // Tests for parseFlags (integration test)
 
-// Tests for parseFlags (integration test)
 func TestParseFlags(t *testing.T) {
 	// Этот тест нельзя запускать параллельно с другими тестами
 	// из-за глобального состояния флагов
@@ -791,6 +790,123 @@ func TestParseFlags(t *testing.T) {
 		err = validateConfigPath(cfgPath)
 		if err == nil {
 			t.Error("expected error for non-existent file, got nil")
+		}
+	})
+
+	// Test 3: No -config flag provided (используется значение по умолчанию)
+	t.Run("no -config flag provided", func(t *testing.T) {
+		testFlagSet := flag.NewFlagSet("test", flag.ContinueOnError)
+		var cfgPath string
+		testFlagSet.StringVar(&cfgPath, "config", "./config.yml", "path to config file")
+
+		// Имитируем запуск без аргументов (только имя программы)
+		err := testFlagSet.Parse([]string{})
+		if err != nil {
+			t.Fatalf("failed to parse flags: %v", err)
+		}
+
+		// Значение должно быть по умолчанию
+		if cfgPath != "./config.yml" {
+			t.Errorf("cfgPath = %s, want ./config.yml", cfgPath)
+		}
+
+		// Проверяем что валидация НЕ выполняется (это делает parseFlags)
+		// Мы просто проверяем что значение по умолчанию установлено
+	})
+
+	// Test 4: Directory instead of file
+	t.Run("directory instead of file", func(t *testing.T) {
+		tmpDir := createTempDir(t)
+		defer os.RemoveAll(tmpDir)
+
+		testFlagSet := flag.NewFlagSet("test", flag.ContinueOnError)
+		var cfgPath string
+		testFlagSet.StringVar(&cfgPath, "config", "./config.yml", "path to config file")
+
+		err := testFlagSet.Parse([]string{"-config", tmpDir})
+		if err != nil {
+			t.Fatalf("failed to parse flags: %v", err)
+		}
+
+		err = validateConfigPath(cfgPath)
+		if err == nil {
+			t.Error("expected error for directory, got nil")
+		} else if !contains(err.Error(), "is a directory, not a file") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	// Test 5: Multiple arguments (дополнительные флаги игнорируются)
+	t.Run("multiple arguments with -config", func(t *testing.T) {
+		tmpFile := createTempFile(t, "test: config")
+		defer os.Remove(tmpFile)
+
+		testFlagSet := flag.NewFlagSet("test", flag.ContinueOnError)
+		var cfgPath string
+		var debug bool
+		testFlagSet.StringVar(&cfgPath, "config", "./config.yml", "path to config file")
+		testFlagSet.BoolVar(&debug, "debug", false, "enable debug mode")
+
+		// Имитируем несколько аргументов
+		err := testFlagSet.Parse([]string{"-config", tmpFile, "-debug"})
+		if err != nil {
+			t.Fatalf("failed to parse flags: %v", err)
+		}
+
+		// Проверяем что оба флага распарсились
+		if cfgPath != tmpFile {
+			t.Errorf("cfgPath = %s, want %s", cfgPath, tmpFile)
+		}
+		if !debug {
+			t.Error("debug flag should be true")
+		}
+	})
+
+	// Test 6: -config flag with empty value (используется значение по умолчанию)
+	t.Run("-config flag with empty value", func(t *testing.T) {
+		testFlagSet := flag.NewFlagSet("test", flag.ContinueOnError)
+		var cfgPath string
+		testFlagSet.StringVar(&cfgPath, "config", "./config.yml", "path to config file")
+
+		// Попытка передать -config без значения
+		// flag.Parse() ожидает значение после -config
+		// В реальности это вызовет ошибку или будет считать следующее слово значением
+		err := testFlagSet.Parse([]string{"-config"})
+		if err != nil {
+			// Ожидаем ошибку, так как нет значения для -config
+			// Это нормальное поведение flag пакета
+			t.Logf("expected parse error: %v", err)
+		} else {
+			// Если ошибки нет, проверяем значение
+			// В этом случае cfgPath будет пустой строкой
+			if cfgPath == "" {
+				t.Log("cfgPath is empty as expected for missing value")
+			}
+		}
+	})
+
+	// Test 7: Different flag order
+	t.Run("different flag order", func(t *testing.T) {
+		tmpFile := createTempFile(t, "test: config")
+		defer os.Remove(tmpFile)
+
+		testFlagSet := flag.NewFlagSet("test", flag.ContinueOnError)
+		var cfgPath string
+		var verbose bool
+		testFlagSet.StringVar(&cfgPath, "config", "./config.yml", "path to config file")
+		testFlagSet.BoolVar(&verbose, "v", false, "verbose output")
+
+		// -config не первый аргумент
+		err := testFlagSet.Parse([]string{"-v", "-config", tmpFile})
+		if err != nil {
+			t.Fatalf("failed to parse flags: %v", err)
+		}
+
+		if cfgPath != tmpFile {
+			t.Errorf("cfgPath = %s, want %s", cfgPath, tmpFile)
+		}
+		if !verbose {
+			t.Error("verbose flag should be true")
 		}
 	})
 }
