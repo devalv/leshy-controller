@@ -28,7 +28,7 @@ build:
 	go env -w CGO_ENABLED=0
 	go env -w GOOS=linux
 	go env -w GOARCH=amd64
-	go build -o controller-app ./cmd
+	go build -o controller-app ./cmd/controller
 
 run:
 	go run ./cmd --config ./config.yml

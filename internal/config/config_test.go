@@ -630,6 +630,7 @@ func TestConfigValidate(t *testing.T) {
 				APIListenAddr:       "127.0.0.1:9090",
 				GuardedPortsRange:   "1024-2048",
 				HandshakeWindowSecs: 30,
+				ShutdownTimeout:     5,
 			},
 			wantErr: false,
 		},
@@ -642,9 +643,10 @@ func TestConfigValidate(t *testing.T) {
 				APIListenAddr:       "invalid",
 				GuardedPortsRange:   "invalid",
 				HandshakeWindowSecs: 0,
+				ShutdownTimeout:     0,
 			},
 			wantErr:  true,
-			errCount: 6, // all fields invalid
+			errCount: 7, // all fields invalid
 		},
 		{
 			name: "invalid BPF path only",
@@ -655,6 +657,7 @@ func TestConfigValidate(t *testing.T) {
 				APIListenAddr:       "127.0.0.1:9090",
 				GuardedPortsRange:   "1024-2048",
 				HandshakeWindowSecs: 30,
+				ShutdownTimeout:     5,
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -668,6 +671,7 @@ func TestConfigValidate(t *testing.T) {
 				APIListenAddr:       "127.0.0.1:9090",
 				GuardedPortsRange:   "100-200", // invalid (starts at 100 < 1023)
 				HandshakeWindowSecs: 30,
+				ShutdownTimeout:     5,
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -681,6 +685,22 @@ func TestConfigValidate(t *testing.T) {
 				APIListenAddr:       "127.0.0.1:9090",
 				GuardedPortsRange:   "1024-2048",
 				HandshakeWindowSecs: 10801, // > 3 hours
+				ShutdownTimeout:     5,
+			},
+			wantErr:  true,
+			errCount: 1,
+		},
+		{
+			name: "invalid shutdown timeout",
+			config: Config{
+				BPFProgramPath:      validBPF,
+				BPFPinPath:          tmpDir,
+				Iface:               realInterface,
+				APIListenAddr:       "127.0.0.1:9090",
+				GuardedPortsRange:   "1024-2048",
+				HandshakeWindowSecs: 30,
+				ShutdownTimeout:     61, // > 61 secs
+
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -787,6 +807,7 @@ iface: lo
 api_listen_addr: 127.0.0.1:9090
 guarded_ports_range: 1024-2048
 handshake_window_secs: 30
+shutdown_timeout: 5
 `
 
 	// Create temp directory and file structure
@@ -822,6 +843,7 @@ iface: lo
 api_listen_addr: 127.0.0.1:9090
 guarded_ports_range: 1024-2048
 handshake_window_secs: 30
+shutdown_timeout: 5
 `
 
 	err = os.WriteFile(configFile, []byte(configContent), 0o644)
@@ -851,6 +873,9 @@ handshake_window_secs: 30
 	}
 	if cfg.ConfigPath != configFile {
 		t.Errorf("ConfigPath = %s, want %s", cfg.ConfigPath, configFile)
+	}
+	if cfg.ShutdownTimeout != 5 {
+		t.Errorf("ShutdownTimeout = %d, want %d", cfg.ShutdownTimeout, 5)
 	}
 }
 

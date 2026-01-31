@@ -5,3 +5,4 @@ bpf_pin_path: /sys/fs/bpf
 api_listen_addr: 0.0.0.0:9090
 guarded_ports_range: 3389-3391
 handshake_window_secs: 600
+shutdown_timeout: 10

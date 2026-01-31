@@ -6,6 +6,7 @@ require (
 	github.com/cilium/ebpf v0.20.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/rs/zerolog v1.34.0
+	golang.org/x/sync v0.17.0
 	golang.org/x/sys v0.37.0
 )
 

@@ -23,6 +23,7 @@ type Config struct {
 	APIListenAddr       string `yaml:"api_listen_addr"`
 	GuardedPortsRange   string `yaml:"guarded_ports_range"`
 	HandshakeWindowSecs int    `yaml:"handshake_window_secs"`
+	ShutdownTimeout     int    `yaml:"shutdown_timeout"`
 
 	ConfigPath string
 }
@@ -234,6 +235,22 @@ func validateHandshakeWindowSecs(secs int) error {
 	return nil
 }
 
+// Проверяем значение завершения приложения.
+func validateShutdownTimeout(secs int) error {
+	const (
+		minShutdownTimeoutSecs = 1
+		maxShutdownTimeoutSecs = 60
+	)
+	if secs < minShutdownTimeoutSecs {
+		return fmt.Errorf("ShutdownTimeout must be at least 1, got %d", secs)
+	}
+	if secs > maxShutdownTimeoutSecs {
+		return fmt.Errorf("ShutdownTimeout cannot exceed 10800 seconds (3 hours), got %d", secs)
+	}
+
+	return nil
+}
+
 // Читаем аргументы запуска приложения.
 func parseFlags() (path string, err error) {
 	var cfgPath string
@@ -294,6 +311,10 @@ func (cfg *Config) Validate() error {
 
 	if err := validateHandshakeWindowSecs(cfg.HandshakeWindowSecs); err != nil {
 		errs = append(errs, fmt.Errorf("HandshakeWindowSecs: %w", err))
+	}
+
+	if err := validateShutdownTimeout(cfg.ShutdownTimeout); err != nil {
+		errs = append(errs, fmt.Errorf("ShutdownTimeout: %w", err))
 	}
 
 	// Объединяем все ошибки в одну

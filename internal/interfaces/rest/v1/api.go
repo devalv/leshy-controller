@@ -1,117 +1,157 @@
 package v1
 
 import (
-	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"time"
 
-	"github.com/cilium/ebpf"
-	"github.com/devalv/leshy-controller/internal/domain"
-	"github.com/devalv/leshy-controller/internal/infrastructure"
-	"github.com/rs/zerolog/log"
+	"github.com/devalv/leshy-controller/internal/application/filter"
+	restv1 "github.com/devalv/leshy-controller/internal/contracts/rest/v1"
 )
 
-// SetupHTTPHandlers настраивает HTTP обработчики.
-func SetupHTTPHandlers(window time.Duration, pendingMap, guardedPortsMap, statsMap *ebpf.Map) *http.ServeMux { //nolint
-	mux := http.NewServeMux()
+type Deps struct {
+	Filter filter.UseCase
+}
 
-	// Health check
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
-
-	// Stats endpoint для проверки статистики BPF программы
+func Register(mux *http.ServeMux, d Deps) { //nolint
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
-		stats := infrastructure.GetBPFStats(statsMap)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(stats) //nolint
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w, []string{http.MethodGet})
+
+			return
+		}
+
+		st, err := d.Filter.Stats(r.Context())
+		if err != nil {
+			http.Error(w, "failed to get stats", http.StatusInternalServerError)
+
+			return
+		}
+		resp := restv1.StatsResponse{
+			Allowed:                st.Allowed,
+			Dropped:                st.Dropped,
+			SYNAllowed:             st.SYNAllowed,
+			SYNDropped:             st.SYNDropped,
+			ActiveFlowHits:         st.ActiveFlowHits,
+			PendingPromotions:      st.PendingPromotions,
+			PendingExpiredCleanups: st.PendingExpiredCleanups,
+			IPPortAuthHits:         st.IPPortAuthHits,
+			NonGuardedPortAllowed:  st.NonGuardedPortAllowed,
+			GuardedPortDropped:     st.GuardedPortDropped,
+			AllowRatePercent:       st.AllowRatePercent,
+			DropRatePercent:        st.DropRatePercent,
+		}
+
+		writeJSON(w, http.StatusOK, resp)
 	})
 
-	// Main allow endpoint (без аутентификации)
 	mux.HandleFunc("/allow", func(w http.ResponseWriter, r *http.Request) {
-		// Parse request body
-		var req domain.AllowRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, []string{http.MethodPost})
+
+			return
+		}
+
+		req, err := decodeJSON[restv1.AllowRequest](r)
+		if err != nil {
 			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 
 			return
 		}
 
-		// Extract client remote IP or use provided IP
-		var ip net.IP
-		if req.IP != "" {
-			// Use IP from request body
-			ip = net.ParseIP(req.IP)
-		} else {
-			// Use client remote IP
-			host, _, err := net.SplitHostPort(r.RemoteAddr)
-			if err != nil {
-				http.Error(w, "bad remote addr: "+err.Error(), http.StatusBadRequest)
+		ip, err := extractIPv4(r, req.IP)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+
+			return
+		}
+
+		expires, err := d.Filter.Allow(r.Context(), ip, req.Port)
+		if err != nil {
+			switch {
+			case errors.Is(err, filter.ErrInvalidPort):
+				http.Error(w, "Valid port number required", http.StatusBadRequest)
+
+				return
+			case errors.Is(err, filter.ErrPortNotGuarded):
+				http.Error(w, "Port is not guarded - no authorization needed", http.StatusBadRequest)
+
+				return
+			default:
+				http.Error(w, "allow failed", http.StatusInternalServerError)
 
 				return
 			}
-			ip = net.ParseIP(host)
 		}
 
-		if ip == nil || ip.To4() == nil {
-			http.Error(w, "IPv4 address required", http.StatusBadRequest)
-
-			return
-		}
-
-		if req.Port == 0 {
-			http.Error(w, "Valid port number required", http.StatusBadRequest)
-
-			return
-		}
-
-		// Check if port is guarded
-		if !infrastructure.IsPortGuarded(guardedPortsMap, req.Port) {
-			http.Error(w, "Port is not guarded - no authorization needed", http.StatusBadRequest)
-
-			return
-		}
-
-		expiry := time.Now().Add(window)
-
-		log.Info().Msgf("allowing access for %s to port %d for %s (until %s)", ip, req.Port, window, expiry.Format(time.RFC3339)) //nolint:lll
-
-		// Insert into BPF map (with cleanup of old entry)
-		if err := infrastructure.InsertPendingSrcPort(pendingMap, ip, req.Port, window); err != nil {
-			log.Error().Err(err).Msg("error inserting into BPF map")
-			http.Error(w, "map update failed", http.StatusInternalServerError)
-
-			return
-		}
-
-		log.Info().Msgf("added %s:%d to pending map with %s window", ip, req.Port, window)
-
-		// Проверяем, что запись действительно добавлена и доступна для чтения
-		portNetwork := infrastructure.HostToNetworkPort(req.Port)
-		keyBytes := make([]byte, 8) //nolint:mnd
-		binary.BigEndian.PutUint32(keyBytes[0:4], binary.BigEndian.Uint32(ip.To4()))
-		binary.BigEndian.PutUint16(keyBytes[4:6], portNetwork)
-		binary.BigEndian.PutUint16(keyBytes[6:8], 0)
-
-		var value uint64
-		if err := pendingMap.Lookup(keyBytes, &value); err != nil {
-			log.Warn().Err(err).Msg("  ⚠ failed to read back inserted entry")
-		} else {
-			log.Info().Msgf("  ✓ verified: entry exists in map, expires at %s UTC", time.Unix(0, int64(value)).UTC().Format(time.RFC3339)) //nolint
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		response := domain.AllowResponse{
+		resp := restv1.AllowResponse{
 			Message: "Access granted",
-			Expires: expiry.UTC().Format(time.RFC3339),
+			Expires: expires.UTC().Format(time.RFC3339),
 			IP:      ip.String(),
 			Port:    req.Port,
 		}
-		_ = json.NewEncoder(w).Encode(response)
+		writeJSON(w, http.StatusOK, resp)
 	})
+}
 
-	return mux
+// --- helpers ---
+
+func methodNotAllowed(w http.ResponseWriter, allowed []string) {
+	w.Header().Set("Allow", joinAllowed(allowed))
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func joinAllowed(methods []string) string {
+	if len(methods) == 0 {
+		return ""
+	}
+	out := methods[0]
+	for i := 1; i < len(methods); i++ {
+		out += ", " + methods[i]
+	}
+
+	return out
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v) //nolint
+}
+
+func decodeJSON[T any](r *http.Request) (T, error) { //nolint
+	var zero T
+	if r.Body == nil {
+		return zero, errors.New("empty body")
+	}
+	defer r.Body.Close() //nolint
+
+	var v T
+	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
+		return zero, err //nolint
+	}
+
+	return v, nil
+}
+
+func extractIPv4(r *http.Request, override string) (net.IP, error) {
+	var ip net.IP
+
+	if override != "" {
+		ip = net.ParseIP(override)
+	} else {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		ip = net.ParseIP(host)
+	}
+
+	if ip == nil || ip.To4() == nil {
+		return nil, errors.New("IPv4 address required")
+	}
+
+	return ip.To4(), nil
 }

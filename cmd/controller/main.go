@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/devalv/leshy-controller/internal/app"
+	"github.com/devalv/leshy-controller/internal/bootstrap"
 	"github.com/devalv/leshy-controller/internal/config"
 	"github.com/rs/zerolog/log"
 )
@@ -17,13 +17,15 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to read config")
 	}
 
-	log.Debug().Msgf("Config is: `%v`", cfg)
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt, syscall.SIGSEGV)
 	defer cancel()
 
-	app := app.NewApplication(cfg)
-	go app.Start(ctx)
-	<-ctx.Done()
+	application, err := bootstrap.New(cfg)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to bootstrap app") //nolint
+	}
 
-	app.Stop(ctx)
+	if err := application.Run(ctx); err != nil {
+		log.Fatal().Err(err).Msg("application stopped with error")
+	}
 }
