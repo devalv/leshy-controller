@@ -33,15 +33,17 @@ func IsPortGuarded(m *ebpf.Map, port uint16) bool {
 }
 
 func setGuardedPorts(m *ebpf.Map, ports []uint16) error {
-	// Выпполняем предварительную очистку
+	// выполняем предварительную очистку
 	iter := m.Iterate()
 	var key uint16
 	var value uint8
 	for iter.Next(&key, &value) {
-		m.Delete(&key) //nolint
+		if err := m.Delete(&key); err != nil {
+			log.Warn().Err(err).Msgf("failed to delete old map %d", &key)
+		}
 	}
 
-	// Добавляем порты в NETWORK BYTE ORDER
+	// добавляем порты в NETWORK BYTE ORDER
 	for _, port := range ports {
 		portNetwork := hostToNetworkPort(port)
 		v := uint8(1)

@@ -3,6 +3,7 @@
 package leshybpf
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -20,7 +21,7 @@ type DiagnosticsOptions struct {
 }
 
 // RunDiagnostics — для отладки: bpftool prog/map list + сравнение map_ids + проверка pinned путей.
-func RunDiagnostics(opts DiagnosticsOptions) error { //nolint
+func RunDiagnostics(ctx context.Context, opts DiagnosticsOptions) error {
 	log.Debug().Msg("running eBPF diagnostics (debug mode)")
 
 	if opts.Program == "" {
@@ -28,14 +29,13 @@ func RunDiagnostics(opts DiagnosticsOptions) error { //nolint
 	}
 
 	if opts.Iface != "" {
-		err := runTCShow(opts.Iface)
-		if err != nil {
+		if err := runTCShow(ctx, opts.Iface); err != nil {
 			return fmt.Errorf("runTCShow: %w", err)
 		}
 	}
 
 	// 1) Программа и её map_ids
-	progLine, mapIDs, err := bpftoolFindProgramMapIDs(opts.Program)
+	progLine, mapIDs, err := bpftoolFindProgramMapIDs(ctx, opts.Program)
 	if progLine != "" {
 		log.Debug().Msgf("bpftool: program line: %s", progLine)
 	}
@@ -53,7 +53,7 @@ func RunDiagnostics(opts DiagnosticsOptions) error { //nolint
 	}
 
 	// 2) Список карт и выделение “интересных” id
-	mapList, err := bpftoolMapList()
+	mapList, err := bpftoolMapList(ctx)
 	if len(mapList) == 0 {
 		return errors.New("bpftool: map list is empty or unavailable")
 	}
@@ -78,8 +78,7 @@ func RunDiagnostics(opts DiagnosticsOptions) error { //nolint
 	}
 
 	// 3) Проверяем, что pinned файлы реально существуют на FS
-	err = checkPinnedPaths(opts.PinPath, opts.MapNames)
-	if err != nil {
+	if err := checkPinnedPaths(opts.PinPath, opts.MapNames); err != nil {
 		return fmt.Errorf("checkPinnedPaths: %w", err)
 	}
 
@@ -97,11 +96,10 @@ func RunDiagnostics(opts DiagnosticsOptions) error { //nolint
 	return nil
 }
 
-func runTCShow(iface string) error {
-	cmd := exec.Command("tc", "filter", "show", "dev", iface, "ingress") //nolint:noctx
-	out, err := cmd.CombinedOutput()
+func runTCShow(ctx context.Context, iface string) error {
+	out, err := runCmd(ctx, "tc", "filter", "show", "dev", iface, "ingress")
 	if err != nil {
-		return fmt.Errorf("tc filter show failed: %w", err)
+		return fmt.Errorf("tc filter show failed: %w: %s", err, string(out))
 	}
 
 	s := strings.TrimSpace(string(out))
@@ -121,17 +119,16 @@ func runTCShow(iface string) error {
 }
 
 // bpftoolFindProgramMapIDs ищет первую строку программы (по подстроке имени) и вытаскивает map_ids (если есть).
-func bpftoolFindProgramMapIDs(programName string) (progLine string, mapIDs string, err error) { //nolint:cyclop
+func bpftoolFindProgramMapIDs(ctx context.Context, programName string) (progLine string, mapIDs string, err error) {
 	if !isBpftoolAvailable() {
 		log.Warn().Msg("bpftool is not available on the system.")
 
 		return "", "", nil
 	}
 
-	cmd := exec.Command("bpftool", "prog", "list") //nolint:noctx
-	out, err := cmd.Output()
+	out, err := runCmd(ctx, "bpftool", "prog", "list")
 	if err != nil {
-		return "", "", fmt.Errorf("failed to list bpf programs with bpftool: %w", err)
+		return "", "", fmt.Errorf("failed to list bpf programs with bpftool: %w: %s", err, string(out))
 	}
 
 	lines := strings.Split(string(out), "\n")
@@ -144,20 +141,21 @@ func bpftoolFindProgramMapIDs(programName string) (progLine string, mapIDs strin
 		if strings.Contains(line, programName) { //nolint:nestif
 			progLine = line
 
-			// Ищем map_ids в следующих строках (может быть не сразу следующая)
+			// иногда map_ids может быть в той же строке
+			if strings.Contains(line, "map_ids") {
+				mapIDs, err = extractMapIDs(line)
+				if err != nil {
+					return "", "", fmt.Errorf("extractMapIDs: %w", err)
+				}
+
+				return progLine, mapIDs, nil
+			}
+
+			// ищем map_ids в следующих строках (может быть не сразу следующая)
 			for j := i + 1; j < len(lines) && j < i+15; j++ {
 				l2 := strings.TrimSpace(lines[j])
 				if strings.Contains(l2, "map_ids") {
 					mapIDs, err = extractMapIDs(l2)
-					if err != nil {
-						return "", "", fmt.Errorf("extractMapIDs: %w", err)
-					}
-
-					return progLine, mapIDs, nil
-				}
-				// иногда map_ids может быть в той же строке
-				if strings.Contains(line, "map_ids") {
-					mapIDs, err = extractMapIDs(line)
 					if err != nil {
 						return "", "", fmt.Errorf("extractMapIDs: %w", err)
 					}
@@ -175,30 +173,28 @@ func bpftoolFindProgramMapIDs(programName string) (progLine string, mapIDs strin
 
 func extractMapIDs(s string) (string, error) {
 	// ожидаем фрагмент: "... map_ids 31,32,33,29"
-	idx := strings.Index(s, "map_ids") // TODO: not optimal
-	if idx < 0 {
-		return "", fmt.Errorf("bpftool: map_ids not found in line %q", s)
-	}
-	part := strings.TrimSpace(s[idx+len("map_ids"):])
+	if _, after, found := strings.Cut(s, "map_ids"); found {
+		after = strings.TrimSpace(after)
+		if trimmed, _, hasSpace := strings.Cut(after, " "); hasSpace {
+			after = trimmed
+		}
 
-	if sp := strings.Index(part, " "); sp >= 0 {
-		part = part[:sp]
+		return strings.Trim(after, ","), nil
 	}
-	part = strings.Trim(part, ",")
 
-	return part, nil
+	return "", fmt.Errorf("bpftool: map_ids not found in line %q", s)
 }
 
-func bpftoolMapList() ([]string, error) {
+func bpftoolMapList(ctx context.Context) ([]string, error) {
 	if !isBpftoolAvailable() {
 		log.Warn().Msg("bpftool is not available on the system.")
 
 		return nil, nil
 	}
-	cmd := exec.Command("bpftool", "map", "list") //nolint:noctx
-	out, err := cmd.Output()
+
+	out, err := runCmd(ctx, "bpftool", "map", "list")
 	if err != nil {
-		return nil, fmt.Errorf("bpftool map list failed: %w", err)
+		return nil, fmt.Errorf("bpftool map list failed: %w: %s", err, string(out))
 	}
 
 	lines := strings.Split(string(out), "\n")
@@ -220,7 +216,6 @@ func findMapIDByName(mapList []string, mapName string) (string, error) {
 		if !strings.Contains(line, mapName) {
 			continue
 		}
-		// id — первое поле до ':'
 		fields := strings.Fields(line)
 		if len(fields) == 0 {
 			continue

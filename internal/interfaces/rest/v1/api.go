@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/devalv/leshy-controller/internal/application/filter"
@@ -17,7 +18,7 @@ type Deps struct {
 	Filter filter.UseCase
 }
 
-func Register(mux *http.ServeMux, d Deps) { //nolint
+func Register(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			methodNotAllowed(w, []string{http.MethodGet})
@@ -59,7 +60,7 @@ func Register(mux *http.ServeMux, d Deps) { //nolint
 			return
 		}
 
-		req, err := decodeJSON[restv1.AllowRequest](r)
+		req, err := decodeJSON(r)
 		if err != nil {
 			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 
@@ -115,10 +116,8 @@ func joinAllowed(methods []string) string {
 	if len(methods) == 0 {
 		return ""
 	}
-	out := methods[0]
-	for i := 1; i < len(methods); i++ {
-		out += ", " + methods[i] // TODO: not optimmal
-	}
+
+	out := strings.Join(methods, ", ")
 
 	return out
 }
@@ -134,19 +133,30 @@ func writeJSON(w http.ResponseWriter, status int, v any) error {
 	return nil
 }
 
-func decodeJSON[T any](r *http.Request) (T, error) { //nolint:ireturn
-	var zero T
+func decodeJSON(r *http.Request) (restv1.AllowRequest, error) {
+	var req restv1.AllowRequest
 	if r.Body == nil {
-		return zero, errors.New("empty body")
+		return req, errors.New("empty body")
 	}
-	defer r.Body.Close() //nolint
+	defer func() {
+		if closeErr := r.Body.Close(); closeErr != nil {
+			log.Error().Err(closeErr).Msg("error closing request body")
+		}
+	}()
 
-	var v T
-	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
-		return zero, err //nolint
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return req, fmt.Errorf("error with JSON decoding: %w", err)
 	}
 
-	return v, nil
+	// Валидация
+	if req.IP == "" {
+		return req, errors.New("ip is required")
+	}
+	if req.Port == 0 {
+		return req, errors.New("port is required")
+	}
+
+	return req, nil
 }
 
 func extractIPv4(r *http.Request, override string) (net.IP, error) {

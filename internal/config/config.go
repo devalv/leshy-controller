@@ -146,7 +146,7 @@ func validateAPIListenAddr(addr string) error {
 }
 
 // Проверяем значение диапазона портов.
-func validateGuardedPortsRange(rangeStr string) error { //nolint:cyclop
+func validateGuardedPortsRange(rangeStr string) error {
 	const (
 		minPort = 1023
 		maxPort = 65535

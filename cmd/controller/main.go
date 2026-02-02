@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,22 +13,30 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Error().Err(err).Msg("exit")
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to read config")
+		return fmt.Errorf("failed to read config: %w", err)
 	}
 	log.Debug().Msgf("config: %+v", cfg)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt, syscall.SIGSEGV)
 	defer cancel()
 
-	application, err := bootstrap.New(cfg)
+	application, err := bootstrap.New(ctx, cfg)
 	if err != nil {
-		// TODO: верхний defer cancel не отработает
-		log.Fatal().Err(err).Msg("failed to bootstrap app") //nolint
+		return fmt.Errorf("failed to bootstrap application: %w", err)
 	}
 
 	if err := application.Run(ctx); err != nil {
-		log.Fatal().Err(err).Msg("application stopped with error")
+		return fmt.Errorf("application run: %w", err)
 	}
+
+	return nil
 }

@@ -19,7 +19,7 @@ func readCountersFromStatsMap(m *ciliumebpf.Map) (filter.Counters, error) {
 		return filter.Counters{}, fmt.Errorf("stats map info: %w", err)
 	}
 
-	// Ожидаем минимум 10 * 8 байт = 80 байт
+	// ожидаем минимум 10 * 8 байт = 80 байт
 	if info.ValueSize < 80 { //nolint
 		return filter.Counters{}, fmt.Errorf("invalid stats value size: expected >=80, got %d", info.ValueSize)
 	}
@@ -27,7 +27,7 @@ func readCountersFromStatsMap(m *ciliumebpf.Map) (filter.Counters, error) {
 	key := uint32(0)
 	raw := make([]byte, info.ValueSize)
 
-	// Важно: передаем slice (raw), а не указатель на slice
+	// передаем slice (raw), а не указатель на slice
 	if err := m.Lookup(&key, raw); err != nil {
 		return filter.Counters{}, fmt.Errorf("stats map lookup: %w", err)
 	}

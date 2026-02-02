@@ -33,6 +33,13 @@ func (s *Server) Name() string { return s.name }
 // Start блокируется, пока сервер работает.
 // Остановка происходит извне: оркестратор вызовет Stop(ctx) -> Shutdown().
 func (s *Server) Start(ctx context.Context) error {
+	// если контекст уже отменён — нет смысла стартовать.
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("context cancelled: %w", ctx.Err())
+	default:
+	}
+
 	err := s.srv.ListenAndServe()
 
 	// http.ErrServerClosed — нормальный выход после Shutdown()
@@ -40,11 +47,17 @@ func (s *Server) Start(ctx context.Context) error {
 		return nil
 	}
 
-	return fmt.Errorf("failed to start server: %w", err)
+	return fmt.Errorf("http server listen: %w", err)
 }
 
 // Stop делает graceful shutdown, используя ctx (с таймаутом от оркестратора).
 func (s *Server) Stop(ctx context.Context) error {
-	// TODO: сейчас тут нет контроля ошибки
-	return fmt.Errorf("failed to stop server: %w", s.srv.Shutdown(ctx))
+	if err := s.srv.Shutdown(ctx); err != nil {
+		// Если graceful не успел — можно принудительно закрыть.
+		_ = s.srv.Close()
+
+		return fmt.Errorf("http server shutdown: %w", err)
+	}
+
+	return nil
 }

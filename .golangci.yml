@@ -15,6 +15,12 @@ linters:
     - exhaustruct
     - tagliatelle
     - godox
+  settings:
+    funlen:
+      lines: 150
+      statements: 75
+    cyclop:
+      max-complexity: 25
 
 formatters:
   enable:

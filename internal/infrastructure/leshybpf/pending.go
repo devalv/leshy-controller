@@ -13,7 +13,7 @@ import (
 )
 
 // InsertPendingSrcPort inserts an IP+port into the pending map with expiration.
-func InsertPendingSrcPort(m *ebpf.Map, ip net.IP, port uint16, window time.Duration) error { //nolint:funlen
+func InsertPendingSrcPort(m *ebpf.Map, ip net.IP, port uint16, window time.Duration) error {
 	ip4 := ip.To4()
 	if ip4 == nil {
 		return fmt.Errorf("not an IPv4 address: %s", ip)
