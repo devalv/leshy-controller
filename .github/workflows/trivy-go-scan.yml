@@ -1,0 +1,23 @@
+name: Trivy Go Scan
+
+on: [pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  trivy-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner on filesystem
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs" # Scan the file system
+          format: "table"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          exit-code: "1"
+          ignore-unfixed: true

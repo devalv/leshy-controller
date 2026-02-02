@@ -1,9 +1,11 @@
-name: semgrep C Code Security Scan
+name: semgrep Security Scan
 
 on:
   pull_request:
     paths:
-      - 'cbpf/**'
+      - "cbpf/**"
+      - "cmd/**"
+      - "internal/**"
 
 permissions:
   contents: read
@@ -24,3 +26,5 @@ jobs:
             p/c
             p/security-audit
             p/owasp-top-ten
+            p/golang
+            p/cwe-top-25
