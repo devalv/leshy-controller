@@ -62,7 +62,7 @@ func (s *Service) Allow(ctx context.Context, ip net.IP, port uint16) (time.Time,
 	}
 
 	if s.debug {
-		// Debug не должен ломать основной сценарий
+		// Дополнительная валидация через bpftool
 		_ = s.backend.VerifyPending(ctx, ip, port)
 	}
 

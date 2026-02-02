@@ -13,7 +13,6 @@ type Options struct {
 
 // New создает root http.Handler для REST.
 // versions: ключ — префикс версии (например "/api/v1/"), значение — mux этой версии.
-// Внутри используется StripPrefix, чтобы v1 mux мог регистрировать пути как "/allow", "/stats", ...
 func New(opts Options, versions map[string]http.Handler) http.Handler {
 	root := http.NewServeMux()
 

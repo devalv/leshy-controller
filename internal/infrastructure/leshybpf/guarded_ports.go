@@ -33,7 +33,7 @@ func IsPortGuarded(m *ebpf.Map, port uint16) bool {
 }
 
 func setGuardedPorts(m *ebpf.Map, ports []uint16) error {
-	// Clear existing ports
+	// Выпполняем предварительную очистку
 	iter := m.Iterate()
 	var key uint16
 	var value uint8
@@ -41,7 +41,7 @@ func setGuardedPorts(m *ebpf.Map, ports []uint16) error {
 		m.Delete(&key) //nolint
 	}
 
-	// Add new ports in NETWORK BYTE ORDER
+	// Добавляем порты в NETWORK BYTE ORDER
 	for _, port := range ports {
 		portNetwork := hostToNetworkPort(port)
 		v := uint8(1)
@@ -55,35 +55,35 @@ func setGuardedPorts(m *ebpf.Map, ports []uint16) error {
 }
 
 // InitializeGuardedPorts initializes guarded ports from port range.
-func InitializeGuardedPorts(portsRange string, m *ebpf.Map) {
-	ports := parsePortRange(portsRange)
-	if err := setGuardedPorts(m, ports); err != nil {
-		log.Fatal().Err(err).Msg("failed to initialize guarded ports")
+func InitializeGuardedPorts(portsRange string, m *ebpf.Map) error {
+	ports, err := parsePortRange(portsRange)
+	if err != nil {
+		return fmt.Errorf("failed to parse port range: %w", err)
 	}
-	log.Debug().Msgf("Guarded %d ports: %v", len(ports), portsRange)
+
+	if err := setGuardedPorts(m, ports); err != nil {
+		return fmt.Errorf("failed to initialize guarded ports: %w", err)
+	}
+	log.Info().Msgf("Guarded %d ports: %v", len(ports), portsRange)
+
+	return nil
 }
 
 // parsePortRange parses port range in "start-end" format.
-func parsePortRange(portsRange string) []uint16 {
+func parsePortRange(portsRange string) ([]uint16, error) {
 	parts := strings.Split(portsRange, "-")
 	if len(parts) != 2 { //nolint:mnd
-		log.Error().Msgf("invalid port range format: %s", portsRange)
-
-		return nil
+		return nil, fmt.Errorf("invalid port range format: %s", portsRange)
 	}
 
 	start, err := strconv.ParseUint(parts[0], 10, 16)
 	if err != nil {
-		log.Error().Err(err).Msgf("invalid start port: %s", parts[0])
-
-		return nil
+		return nil, fmt.Errorf("invalid start port: %s", parts[0])
 	}
 
 	end, err := strconv.ParseUint(parts[1], 10, 16)
 	if err != nil {
-		log.Error().Err(err).Msgf("invalid end port: %s", parts[1])
-
-		return nil
+		return nil, fmt.Errorf("invalid end port: %s", parts[1])
 	}
 
 	var ports []uint16
@@ -91,5 +91,5 @@ func parsePortRange(portsRange string) []uint16 {
 		ports = append(ports, uint16(p))
 	}
 
-	return ports
+	return ports, nil
 }

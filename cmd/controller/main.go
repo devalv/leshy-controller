@@ -16,12 +16,14 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to read config")
 	}
+	log.Debug().Msgf("config: %+v", cfg)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt, syscall.SIGSEGV)
 	defer cancel()
 
 	application, err := bootstrap.New(cfg)
 	if err != nil {
+		// TODO: верхний defer cancel не отработает
 		log.Fatal().Err(err).Msg("failed to bootstrap app") //nolint
 	}
 

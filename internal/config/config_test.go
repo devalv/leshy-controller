@@ -637,9 +637,9 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "multiple errors",
 			config: Config{
-				BPFProgramPath:      "", // empty
-				BPFPinPath:          "", // empty
-				Iface:               "", // empty
+				BPFProgramPath:      "",
+				BPFPinPath:          "",
+				Iface:               "",
 				APIListenAddr:       "invalid",
 				GuardedPortsRange:   "invalid",
 				HandshakeWindowSecs: 0,

@@ -29,25 +29,25 @@
 │
 ├── cmd/
 │   └── leshy-controller/
-│       └── main.go
-│           # Точка входа.
+│       └── `main.go`
+│           # Точка входа
 │           # - читает конфиг
 │           # - настраивает контекст сигналов
 │           # - вызывает bootstrap.New(cfg) и затем application.Run(ctx)
 │
 ├── internal/
 │   ├── runtime/
-│   │   ├── app.go
+│   │   ├── `app.go`
 │   │   │   # Оркестратор жизненного цикла.
 │   │   │   # - принимает набор Server (транспортов)
 │   │   │   # - управляет запуском/остановкой (graceful shutdown)
 │   │   │
-│   │   └── server.go
+│   │   └── `server.go`
 │   │       # Порт для транспорта (primary adapter).
 │   │       # Интерфейс абстрактного сервера: Start/Stop/Name
 │   │
 │   ├── bootstrap/
-│   │   └── bootstrap.go
+│   │   └── `bootstrap.go`
 │   │       # Composition root / "сборка" приложения.
 │   │       # Единственное место, где "склеиваются" зависимости:
 │   │       # - чтение cfg значений и преобразование в Options
@@ -58,42 +58,47 @@
 │   │       # Возвращает `*app.Application` (оркестратор) готовый к `Run(ctx)`
 │   │
 │   ├── config/
-│   │   ├── config.go
+│   │   ├── `config.go`
 │   │   │   # Структура Config и чтение yaml/env.
 │   │   │   # Важно: config — не часть "чистой" архитектуры, это внешний ввод.
 │   │   │   # Его используют main/bootstrap, но не usecase и не интерфейсные адаптеры.
-│   │   └── config_test.go
+│   │   └── `config_test.go`
 │   │
 │   ├── application/  # usecases
 │   │   └── filter/
-│   │       ├── service.go
+│   │       ├── `service.go`
 │   │       │   # Application / Usecase слой.
 │   │       │   # Содержит сценарии (Allow, Stats) и правила (guarded-only, window).
 │   │       │   # Зависит только от порта Backend (интерфейса), а не от eBPF.
 │   │       │
-│   │       └── port.go
+│   │       ├── `stats.go`
+│   │       │   # Расширенная статистика работы
+│   │       │
+│   │       └── `port.go`
 │   │           # Port (secondary port) для инфраструктуры.
 │   │           # Контракт, который должен реализовать backend (eBPF/мок/иная реализация).
 │   │
 │   ├── interfaces/
 │   │   ├── rest/
 │   │   │   ├── httpserver/
-│   │   │   │   ├── server.go
+│   │   │   │   ├── `server.go`
 │   │   │   │   │   # HTTP transport adapter.
 │   │   │   │   │   # Реализация app.Server через net/http.Server + Shutdown.
 │   │   │   │   │   # Не содержит бизнес-логики: только старт/стоп сервера.
-│   │   │   │   └── handlers.go
+│   │   │   │   └── `handlers.go`
 │   │   │   │       # Вспомогательные дефолтные хендлеры (например NotFound).
 │   │   │   │
+│   │   │   ├── router/
+│   │   │   │   └── `router.go`
+│   │   │   │       # Система роутинга хендлеров
+│   │   │   │
 │   │   │   └── v1/
-│   │   │       ├── api.go
+│   │   │       ├── `api.go`
 │   │   │       │   # HTTP adapter уровня v1.
 │   │   │       │   # - парсит HTTP/JSON
 │   │   │       │   # - вызывает usecase (application/filter.UseCase)
 │   │   │       │   # - возвращает HTTP/JSON
 │   │   │       │   # НЕ знает про ebpf.Map и НЕ вызывает infrastructure напрямую.
-│   │   │       └── helpers.go (опционально)
-│   │   │           # Общие helper-функции для v1 (decodeJSON, writeJSON, extractIPv4).
 │   │   │
 │   │   └── grpc/ (аналогичный слою rest)
 │   │       ├── server/
@@ -103,43 +108,43 @@
 │   │
 │   ├── infrastructure/
 │   │   ├── leshybpf/
-│   │   │   ├── attach_tc.go
+│   │   │   ├── `attach_tc.go`
 │   │   │   │   # Загрузка BPF-коллекции, pinning карт/программы и attach к TC (ingress).
 │   │   │   │   # Это “операционный” код инфраструктуры: взаимодействие с ОС, tc, pinned paths.
 │   │   │   │
-│   │   │   ├── diagnostics_linux.go
-│   │   │   │   # Тяжёлая диагностика (bpftool/tc): поиск program map_ids, сравнение с pinned map IDs,
+│   │   │   ├── `diagnostics_linux.go`
+│   │   │   │   # Расширенная диагностика (bpftool/tc): поиск program map_ids, сравнение с pinned map IDs,
 │   │   │   │   # проверка pinned путей на FS. Запускается только в debug-режиме.
 │   │   │   │   # Linux-only (build tag).
 │   │   │   │
-│   │   │   ├── pending.go
+│   │   │   ├── `pending.go`
 │   │   │   │   # Запись pending-авторизаций в eBPF map.
 │   │   │   │   # Содержит работу с байтовыми ключами и прямой syscall bpf() (SYS_BPF),
 │   │   │   │   # чтобы гарантировать network byte order ключей.
 │   │   │   │
-│   │   │   ├── guarded_ports.go
+│   │   │   ├── `guarded_ports.go`
 │   │   │   │   # Управление “guarded ports” картой: парс диапазона портов, запись/очистка,
 │   │   │   │   # проверка, что порт guarded, чтение списка портов.
 │   │   │   │
-│   │   │   ├── stats.go
+│   │   │   ├── `stats.go`
 │   │   │   │   # Чтение статистики из stats map и преобразование в типизированные счетчики
 │   │   │   │   # application/filter.Counters (без map[string]interface{}).
 │   │   │   │
-│   │   │   ├── filter_backend.go
+│   │   │   ├── `filter_backend.go`
 │   │   │   │   # Реализация application/filter.Backend на eBPF maps.
 │   │   │   │   # Здесь “адаптер” инфраструктуры использует функции этого же пакета:
 │   │   │   │   # IsPortGuarded / InsertPendingSrcPort / readCountersFromStatsMap и т.д.
 │   │   │   │
-│   │   │   ├── constants.go
+│   │   │   ├── `constants.go`
 │   │   │   │   # Имена pinned объектов (карты/программа) и константы, связанные с BPF.
 │   │   │   │
-│   │   │   ├── byteorder.go
+│   │   │   ├── `byteorder.go`
 │   │   │   │   # Преобразование портов host<->network byte order.
 │   │   │   │
-│   │   │   ├── ipport_key.go
+│   │   │   ├── `ipport_key.go`
 │   │   │   │   # Структура ключа eBPF карты (IpPortKey). Это инфраструктурная деталь, не API/домен.
 │   │   │   │
-│   │   │   └── collection.go
+│   │   │   └── `collection.go`
 │   │   │       # Хранение ссылки на загруженную BPF коллекцию, чтобы она не была закрыта.
 │   │   │       # Позже можно заменить на отдельный Manager (вместо глобальной переменной).
 │   │   │
@@ -148,6 +153,7 @@
 │   ├── contracts/
 │   │   └── rest/
 │   │       └── v1/
+│   │           └── `types.go`
 │   │           # DTO/контракты API (AllowRequest/AllowResponse/StatsResponse).
 │   │           # Это НЕ domain: это формат внешнего обмена (HTTP/gRPC).
 │   │
@@ -156,10 +162,10 @@
 │
 ├── docs/
 │   ├── examples/
-│   │   ├── basic.md
+│   │   ├── `basic.md`
 │   │   ├── advanced/
 │   ├── cbpf/
-│   ├── architecture.md
+│   ├── `architecture.md`
 │   └── api/
 │
 ├── .pre-commit-config.yaml    # Pre-commit хуки
@@ -177,3 +183,12 @@
 > **infrastructure/leshybpf** — это *конкретный secondary adapter* (инфраструктурный драйвер) для Linux/eBPF/TC.
 > Usecase-слой (`internal/application/filter`) **не знает** про `*ebpf.Map`, `tc`, `bpftool` и syscalls: он общается с инфраструктурой только через порт `filter.Backend`.
 > Внутри `leshybpf` собрана вся “железная” логика: attach/pin, работа с картами, byte order, и опциональная диагностика (только в debug).
+
+### Вызовы консольных утилит
+
+#### bpftool
+Используется в режиме отладки. Если отсутствует в системе - будет залогировано предупреждение. Необходима для расширенного анализа вывода bpf-программ.
+
+
+#### tc
+Используется для расширенной аналитики планировщика пакетов ядра.

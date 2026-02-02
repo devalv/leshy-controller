@@ -33,18 +33,15 @@ func AttachBPFWithTCWithOptions( //nolint
 	opts AttachOptions,
 	pendingMap, guardedPortsMap, statsMap, activeFlowsMap **ebpf.Map,
 ) error {
-	// cleanup tc qdisc
-	log.Info().Msgf("cleaning up old TC filters and maps for interface %s", iface)
+	log.Debug().Msgf("cleaning up old TC filters and maps for interface %s", iface)
 	cmd := exec.Command("tc", "qdisc", "del", "dev", iface, "clsact") //nolint:noctx
-	_ = cmd.Run()                                                     // игнорируем ошибку
+	_ = cmd.Run()                                                     // TODO: обработать ошибку
 
-	// remove old pinned program
 	oldProgPath := bpfPinPath + "/" + PinnedProgRel
 	if err := os.Remove(oldProgPath); err == nil {
-		log.Info().Msgf("removed old pinned program: %s", oldProgPath)
+		log.Debug().Msgf("removed old pinned program: %s", oldProgPath)
 	}
 
-	// remove old pinned maps
 	oldMaps := []string{
 		PendingSrcMapName,
 		GuardedPortsMapName,
@@ -55,19 +52,23 @@ func AttachBPFWithTCWithOptions( //nolint
 	for _, mapName := range oldMaps {
 		mapPath := fmt.Sprintf("%s/%s", bpfPinPath, mapName)
 		if err := os.Remove(mapPath); err == nil {
-			log.Info().Msgf("removed old pinned map: %s", mapPath)
+			log.Debug().Msgf("removed old pinned map: %s", mapPath)
 		}
 	}
 
-	// optional heavy cleanup via bpftool (оставляем как есть)
-	cleanupOldProgramsViaBPFTool()
+	if opts.Debug {
+		err := cleanupOldProgramsViaBPFTool()
+		if err != nil {
+			return fmt.Errorf("cleanup old programs via bpftool: %w", err)
+		}
+	}
 
 	spec, err := ebpf.LoadCollectionSpec(bpfProgramPath)
 	if err != nil {
 		return fmt.Errorf("loading BPF collection spec: %w", err)
 	}
 
-	// pinning by name
+	// привязка по имени мап
 	spec.Maps[PendingSrcMapName].Pinning = ebpf.PinByName
 	spec.Maps[ActiveFlowsMapName].Pinning = ebpf.PinByName
 	spec.Maps[StatsMapName].Pinning = ebpf.PinByName
@@ -105,23 +106,22 @@ func AttachBPFWithTCWithOptions( //nolint
 		return errors.New("l4_filter program not found")
 	}
 
-	// pin program
 	progPinFile := bpfPinPath + "/" + PinnedProgRel
 	if err := prog.Pin(progPinFile); err != nil {
 		if !os.IsExist(err) {
-			log.Warn().Err(err).Msg("failed to pin program")
+			return fmt.Errorf("pinning program: %w", err)
 		} else {
-			log.Info().Msgf("program already pinned at %s", progPinFile)
+			log.Debug().Msgf("program already pinned at %s", progPinFile)
 		}
 	} else {
-		log.Info().Msgf("program pinned at %s", progPinFile)
+		log.Debug().Msgf("program pinned at %s", progPinFile)
 	}
 
-	// ensure clsact
+	// привязываем дисциплину очереди для фильтрации на интерфейсе
 	cmd = exec.Command("tc", "qdisc", "add", "dev", iface, "clsact") //nolint:noctx
-	_ = cmd.Run()
+	_ = cmd.Run()                                                    // TODO: обработать ошибку
 
-	// attach pinned program to ingress
+	// прикрепляем bpf-программу (мапу) для фильтрации трафика на интерфейсе
 	cmd = exec.Command("tc", "filter", "replace", "dev", iface, "ingress", "prio", "1", "handle", "1", "bpf", "da", "pinned", progPinFile) //nolint
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -132,75 +132,94 @@ func AttachBPFWithTCWithOptions( //nolint
 	}
 
 	log.Debug().Msgf("BPF program loaded and attached to %s ingress (FD: %d)", iface, prog.FD())
-	log.Info().Msgf("BPF maps pinned in %s", bpfPinPath)
+	log.Debug().Msgf("BPF maps pinned in %s", bpfPinPath)
 
-	// lightweight check
-	checkTCFilterAttached(iface)
-	testPendingWritable(coll)
+	err = checkTCFilterAttached(iface)
+	if err != nil {
+		return fmt.Errorf("checking TC filter attached: %w", err)
+	}
+	err = testPendingWritable(coll)
+	if err != nil {
+		return fmt.Errorf("testing pending writable: %w", err)
+	}
 
-	// heavy diagnostics only in debug
 	if opts.Debug {
-		RunDiagnostics(DiagnosticsOptions{
+		err := RunDiagnostics(DiagnosticsOptions{
 			Iface:    iface,
 			PinPath:  bpfPinPath,
 			Program:  ProgramName,
 			MapNames: []string{PendingSrcMapName, GuardedPortsMapName, StatsMapName, ActiveFlowsMapName, LogsMapName},
 		})
+		if err != nil {
+			return fmt.Errorf("running diagnostics: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func cleanupOldProgramsViaBPFTool() {
-	log.Info().Msg("cleaning up old BPF programs and maps via bpftool...")
+func cleanupOldProgramsViaBPFTool() error {
+	log.Debug().Msg("cleaning up old BPF programs and maps via bpftool...")
+	if !isBpftoolAvailable() {
+		log.Warn().Msg("bpftool is not available on the system.")
+
+		return nil
+	}
+
 	cmd := exec.Command("bpftool", "prog", "list") //nolint:noctx
 	progListOutput, err := cmd.Output()
 	if err != nil {
-		return
+		return fmt.Errorf("failed to list bpf programs with bpftool: %w", err)
 	}
 
-	lines := strings.Split(string(progListOutput), "\n")
+	lines := strings.Split(string(progListOutput), "\n") // TODO: not optimal
 	for _, line := range lines {
 		if strings.Contains(line, ProgramName) {
 			parts := strings.Fields(line)
 			if len(parts) > 0 {
 				progID := strings.TrimSuffix(parts[0], ":")
-				log.Info().Msgf("removing old BPF program ID: %s", progID)
-				_ = exec.Command("bpftool", "prog", "delete", "id", progID).Run() //nolint
+				log.Debug().Msgf("removing old BPF program ID: %s", progID)
+				err = exec.Command("bpftool", "prog", "delete", "id", progID).Run() //nolint
+				if err != nil {
+					return fmt.Errorf("removing old BPF program ID %s: %w", progID, err)
+				}
 			}
 		}
 	}
+
+	return nil
 }
 
-func testPendingWritable(coll *ebpf.Collection) {
+func testPendingWritable(coll *ebpf.Collection) error {
 	pendingMap, ok := coll.Maps[PendingSrcMapName]
 	if !ok || pendingMap == nil {
-		return
+		return errors.New("pending map not found")
 	}
 
 	testKey := IpPortKey{Saddr: 0x01010101, Dport: 0x1234, Pad: 0} //nolint:mnd
 	testValue := uint64(time.Now().UnixNano())                     //nolint
 
 	if err := pendingMap.Put(&testKey, &testValue); err != nil {
-		log.Warn().Err(err).Msg("  ⚠ WARNING: failed to write test entry to pending map")
-
-		return
+		return fmt.Errorf("failed to write test entry to pending map: %w", err)
 	}
 
 	_ = pendingMap.Delete(&testKey)
-	log.Info().Msg("  ✓ pending map is writable")
+	log.Debug().Msg("  ✓ pending map is writable")
+
+	return nil
 }
 
-func checkTCFilterAttached(iface string) {
+func checkTCFilterAttached(iface string) error {
 	cmd := exec.Command("tc", "filter", "show", "dev", iface, "ingress") //nolint:noctx
 	output, err := cmd.Output()
 	if err != nil {
-		return
+		return fmt.Errorf("running tc filter show: %w", err)
 	}
 	if strings.Contains(string(output), ProgramName) {
-		log.Info().Msgf("  ✓ TC filter found on %s ingress", iface)
+		log.Debug().Msgf("  ✓ TC filter found on %s ingress", iface)
 	} else {
-		log.Warn().Msg("  ⚠ WARNING: TC filter not found in tc output")
-		log.Warn().Msgf("  tc output: %s", string(output))
+		return fmt.Errorf("  ⚠ WARNING: TC filter not found in tc output      tc output: %s", string(output))
 	}
+
+	return nil
 }

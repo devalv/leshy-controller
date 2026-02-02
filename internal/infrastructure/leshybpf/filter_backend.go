@@ -3,6 +3,7 @@ package leshybpf
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"time"
 
@@ -51,12 +52,10 @@ func (b *FilterBackend) VerifyPending(ctx context.Context, ip net.IP, port uint1
 
 	var value uint64
 	if err := b.pending.Lookup(keyBytes, &value); err != nil {
-		log.Warn().Err(err).Msg("failed to read back inserted entry")
-
-		return err //nolint
+		return fmt.Errorf("failed to read back inserted entry %w", err)
 	}
 
-	log.Info().Msgf(
+	log.Debug().Msgf(
 		"verified: entry exists in map, expires at %s UTC",
 		time.Unix(0, int64(value)).UTC().Format(time.RFC3339), //nolint
 	)

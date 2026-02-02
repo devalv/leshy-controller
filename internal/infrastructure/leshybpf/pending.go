@@ -21,7 +21,7 @@ func InsertPendingSrcPort(m *ebpf.Map, ip net.IP, port uint16, window time.Durat
 
 	portNetwork := hostToNetworkPort(port)
 
-	// key in network byte order (big-endian): ipv4(4) + port(2) + pad(2)
+	// ключ в network byte order (big-endian): ipv4(4) + port(2) + pad(2)
 	keyBytes := make([]byte, 8)                                             //nolint:mnd
 	binary.BigEndian.PutUint32(keyBytes[0:4], binary.BigEndian.Uint32(ip4)) // IP in network order
 	binary.BigEndian.PutUint16(keyBytes[4:6], portNetwork)                  // port in network order
@@ -68,7 +68,6 @@ func InsertPendingSrcPort(m *ebpf.Map, ip net.IP, port uint16, window time.Durat
 
 	log.Debug().Msg("  ✓ key written to map via direct bpf() syscall")
 
-	// optional diagnostics read-back (оставим как у тебя)
 	type bpfAttrMapLookupElem struct {
 		MapFD uint32
 		_     uint32

@@ -19,7 +19,7 @@ func New(addr string, handler http.Handler) *Server {
 	}
 
 	return &Server{
-		name: "http",
+		name: "http-rest-api:" + addr,
 		srv: &http.Server{
 			Addr:              addr,
 			Handler:           handler,
@@ -45,5 +45,6 @@ func (s *Server) Start(ctx context.Context) error {
 
 // Stop делает graceful shutdown, используя ctx (с таймаутом от оркестратора).
 func (s *Server) Stop(ctx context.Context) error {
+	// TODO: сейчас тут нет контроля ошибки
 	return fmt.Errorf("failed to stop server: %w", s.srv.Shutdown(ctx))
 }

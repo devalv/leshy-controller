@@ -46,7 +46,10 @@ func New(cfg *config.Config) (*runtime.Application, error) {
 		return nil, errors.New("failed to get maps from BPF collection (nil)")
 	}
 
-	leshybpf.InitializeGuardedPorts(cfg.GuardedPortsRange, guardedPortsMap)
+	err := leshybpf.InitializeGuardedPorts(cfg.GuardedPortsRange, guardedPortsMap)
+	if err != nil {
+		return nil, fmt.Errorf("initialize guarded ports: %w", err)
+	}
 
 	// --- Usecase + Backend wiring ---
 	backend := leshybpf.NewFilterBackend(pendingMap, guardedPortsMap, statsMap)

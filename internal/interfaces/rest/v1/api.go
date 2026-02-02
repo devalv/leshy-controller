@@ -3,12 +3,14 @@ package v1
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
 
 	"github.com/devalv/leshy-controller/internal/application/filter"
 	restv1 "github.com/devalv/leshy-controller/internal/contracts/rest/v1"
+	"github.com/rs/zerolog/log"
 )
 
 type Deps struct {
@@ -44,7 +46,10 @@ func Register(mux *http.ServeMux, d Deps) { //nolint
 			DropRatePercent:        st.DropRatePercent,
 		}
 
-		writeJSON(w, http.StatusOK, resp)
+		err = writeJSON(w, http.StatusOK, resp)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to write JSON response")
+		}
 	})
 
 	mux.HandleFunc("/allow", func(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +97,10 @@ func Register(mux *http.ServeMux, d Deps) { //nolint
 			IP:      ip.String(),
 			Port:    req.Port,
 		}
-		writeJSON(w, http.StatusOK, resp)
+		err = writeJSON(w, http.StatusOK, resp)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to write JSON response")
+		}
 	})
 }
 
@@ -109,19 +117,24 @@ func joinAllowed(methods []string) string {
 	}
 	out := methods[0]
 	for i := 1; i < len(methods); i++ {
-		out += ", " + methods[i]
+		out += ", " + methods[i] // TODO: not optimmal
 	}
 
 	return out
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
+func writeJSON(w http.ResponseWriter, status int, v any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v) //nolint
+	err := json.NewEncoder(w).Encode(v)
+	if err != nil {
+		return fmt.Errorf("json encoding failed: %w", err)
+	}
+
+	return nil
 }
 
-func decodeJSON[T any](r *http.Request) (T, error) { //nolint
+func decodeJSON[T any](r *http.Request) (T, error) { //nolint:ireturn
 	var zero T
 	if r.Body == nil {
 		return zero, errors.New("empty body")
