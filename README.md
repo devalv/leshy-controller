@@ -42,6 +42,9 @@
 │   │   │   # - принимает набор Server (транспортов)
 │   │   │   # - управляет запуском/остановкой (graceful shutdown)
 │   │   │
+│   │   ├── `close_server.go`
+│   │   │   # "виртуальный" Server для освобождения ресурсов на shutdown
+│   │   │
 │   │   └── `server.go`
 │   │       # Порт для транспорта (primary adapter).
 │   │       # Интерфейс абстрактного сервера: Start/Stop/Name
@@ -108,9 +111,15 @@
 │   │
 │   ├── infrastructure/
 │   │   ├── leshybpf/
+│   │   │   ├── `attach_manager.go`
+│   │   │   │   # управление жизненным циклом attach_tc
+│   │   │   │
 │   │   │   ├── `attach_tc.go`
 │   │   │   │   # Загрузка BPF-коллекции, pinning карт/программы и attach к TC (ingress).
 │   │   │   │   # Это “операционный” код инфраструктуры: взаимодействие с ОС, tc, pinned paths.
+│   │   │   │
+│   │   │   ├── `exec.go`
+│   │   │   │   # Обёртки для запуска консольных утилит (tc, bpftool).
 │   │   │   │
 │   │   │   ├── `diagnostics_linux.go`
 │   │   │   │   # Расширенная диагностика (bpftool/tc): поиск program map_ids, сравнение с pinned map IDs,
