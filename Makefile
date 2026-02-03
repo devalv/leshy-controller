@@ -7,7 +7,7 @@ fmt:
 	gofmt -w -s ./cmd ./internal
 	gofumpt -w ./cmd ./internal
 	goimports -w ./cmd ./internal
-# 	golangci-lint run --fix
+	golangci-lint run --fix
 
 test:
 	docker run --rm \
