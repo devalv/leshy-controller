@@ -131,44 +131,80 @@ func bpftoolFindProgramMapIDs(ctx context.Context, programName string) (progLine
 		return "", "", fmt.Errorf("failed to list bpf programs with bpftool: %w: %s", err, string(out))
 	}
 
+	progLine, mapIDs, err = findProgramInfoInBpftoolOut(out, programName)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to find program info in bpftool output: %w", err)
+	}
+	if progLine != "" || mapIDs != "" {
+		return progLine, mapIDs, nil
+	}
+
+	return "", "", fmt.Errorf("bpftool: program %q not found in prog list", programName)
+}
+
+func findProgramInfoInBpftoolOut(out []byte, programName string) (string, string, error) {
 	lines := strings.Split(string(out), "\n")
+
 	for i := range lines {
 		line := strings.TrimSpace(lines[i])
 		if line == "" {
 			continue
 		}
 
-		if strings.Contains(line, programName) { //nolint:nestif
-			progLine = line
+		if strings.Contains(line, programName) {
+			progLine := line
 
-			// иногда map_ids может быть в той же строке
-			if strings.Contains(line, "map_ids") {
-				mapIDs, err = extractMapIDs(line)
-				if err != nil {
-					return "", "", fmt.Errorf("extractMapIDs: %w", err)
-				}
-
-				return progLine, mapIDs, nil
-			}
-
-			// ищем map_ids в следующих строках (может быть не сразу следующая)
-			for j := i + 1; j < len(lines) && j < i+15; j++ {
-				l2 := strings.TrimSpace(lines[j])
-				if strings.Contains(l2, "map_ids") {
-					mapIDs, err = extractMapIDs(l2)
-					if err != nil {
-						return "", "", fmt.Errorf("extractMapIDs: %w", err)
-					}
-
-					return progLine, mapIDs, nil
-				}
+			// Ищем map_ids, начиная с текущей строки
+			mapIDs, err := findMapIDsInLines(lines, i)
+			if err != nil {
+				return "", "", fmt.Errorf("failed to find map IDs: %w", err)
 			}
 
 			return progLine, mapIDs, nil
 		}
 	}
 
-	return "", "", fmt.Errorf("bpftool: program %q not found in prog list", programName)
+	return "", "", fmt.Errorf("program %s not found in output", programName)
+}
+
+// findMapIDsInLines - ищет map_ids в текущей и следующих строках.
+func findMapIDsInLines(lines []string, startIdx int) (string, error) {
+	const maxLookahead = 15 // максимальное количество строк для поиска
+
+	// Проверяем текущую строку
+	if mapIDs, err := extractMapIDsIfPresent(lines[startIdx]); err != nil {
+		return "", fmt.Errorf("extractMapIDs from line %d: %w", startIdx, err)
+	} else if mapIDs != "" {
+		return mapIDs, nil
+	}
+
+	// Ищем в следующих строках (ограничиваем поиск)
+	endIdx := min(startIdx+maxLookahead, len(lines))
+
+	for j := startIdx + 1; j < endIdx; j++ {
+		line := strings.TrimSpace(lines[j])
+		if line == "" {
+			continue // пропускаем пустые строки
+		}
+
+		if mapIDs, err := extractMapIDsIfPresent(line); err != nil {
+			return "", fmt.Errorf("extractMapIDs from line %d: %w", j, err)
+		} else if mapIDs != "" {
+			return mapIDs, nil
+		}
+	}
+
+	// Map IDs не найдены - возвращаем пустую строку (это нормально)
+	return "", nil
+}
+
+// extractMapIDsIfPresent - извлекает map_ids если они есть в строке.
+func extractMapIDsIfPresent(line string) (string, error) {
+	if strings.Contains(line, "map_ids") {
+		return extractMapIDs(line)
+	}
+
+	return "", nil
 }
 
 func extractMapIDs(s string) (string, error) {

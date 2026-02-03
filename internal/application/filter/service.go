@@ -3,6 +3,7 @@ package filter
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"time"
 )
@@ -51,14 +52,14 @@ func (s *Service) Allow(ctx context.Context, ip net.IP, port uint16) (time.Time,
 
 	guarded, err := s.backend.IsPortGuarded(ctx, port)
 	if err != nil {
-		return time.Time{}, err //nolint
+		return time.Time{}, fmt.Errorf("IsPortGuarded err: %w", err)
 	}
 	if !guarded {
 		return time.Time{}, ErrPortNotGuarded
 	}
 
 	if err := s.backend.InsertPending(ctx, ip, port, s.window); err != nil {
-		return time.Time{}, err //nolint
+		return time.Time{}, fmt.Errorf("InsertPending err: %w", err)
 	}
 
 	if s.debug {
@@ -72,7 +73,7 @@ func (s *Service) Allow(ctx context.Context, ip net.IP, port uint16) (time.Time,
 func (s *Service) Stats(ctx context.Context) (Stats, error) {
 	c, err := s.backend.Stats(ctx)
 	if err != nil {
-		return Stats{}, err //nolint
+		return Stats{}, fmt.Errorf("backend stats err: %w", err)
 	}
 
 	total := c.Allowed + c.Dropped

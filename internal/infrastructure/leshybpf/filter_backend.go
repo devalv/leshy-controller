@@ -45,7 +45,7 @@ func (b *FilterBackend) VerifyPending(ctx context.Context, ip net.IP, port uint1
 
 	portNetwork := HostToNetworkPort(port)
 
-	keyBytes := make([]byte, 8) //nolint
+	keyBytes := make([]byte, 8) //nolint:mnd
 	binary.BigEndian.PutUint32(keyBytes[0:4], binary.BigEndian.Uint32(ip.To4()))
 	binary.BigEndian.PutUint16(keyBytes[4:6], portNetwork)
 	binary.BigEndian.PutUint16(keyBytes[6:8], 0)
@@ -56,8 +56,7 @@ func (b *FilterBackend) VerifyPending(ctx context.Context, ip net.IP, port uint1
 	}
 
 	log.Debug().Msgf(
-		"verified: entry exists in map, expires at %s UTC",
-		time.Unix(0, int64(value)).UTC().Format(time.RFC3339), //nolint
+		"verified: entry exists in map, expires at %s UTC", formatNanoTimestamp(value),
 	)
 
 	return nil

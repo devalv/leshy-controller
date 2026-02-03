@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/rs/zerolog/log"
@@ -89,7 +88,7 @@ func testPendingWritable(coll *ebpf.Collection) error {
 	}
 
 	testKey := IpPortKey{Saddr: 0x01010101, Dport: 0x1234, Pad: 0} //nolint:mnd
-	testValue := uint64(time.Now().UnixNano())                     //nolint
+	testValue := getUnixNanoUint64()
 
 	if err := pendingMap.Put(&testKey, &testValue); err != nil {
 		return fmt.Errorf("failed to write test entry to pending map: %w", err)

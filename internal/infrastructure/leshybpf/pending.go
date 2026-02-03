@@ -27,18 +27,13 @@ func InsertPendingSrcPort(m *ebpf.Map, ip net.IP, port uint16, window time.Durat
 	binary.BigEndian.PutUint16(keyBytes[4:6], portNetwork)                  // port in network order
 	binary.BigEndian.PutUint16(keyBytes[6:8], 0)                            // pad
 
-	expiry := time.Now().Add(window).UnixNano()
-	valueBytes := make([]byte, 8)                             //nolint:mnd
-	binary.LittleEndian.PutUint64(valueBytes, uint64(expiry)) // #nosec G115
+	expiry := getExpiryUint64(window)
+	valueBytes := make([]byte, 8) //nolint:mnd
+	binary.LittleEndian.PutUint64(valueBytes, expiry)
 
 	log.Info().Msgf("inserting authorization: IP=%s, Port=%d (network: %d), Expires=%s",
 		ip, port, portNetwork, time.Now().Add(window).Format(time.RFC3339))
 	log.Debug().Msgf("  key bytes in network byte order (big-endian): %x", keyBytes)
-
-	mapFD := m.FD()
-	if mapFD < 0 {
-		return fmt.Errorf("invalid map file descriptor: %d", mapFD)
-	}
 
 	// Linux: bpf_attr for MAP_UPDATE_ELEM
 	type bpfAttrMapUpdateElem struct {
@@ -49,17 +44,21 @@ func InsertPendingSrcPort(m *ebpf.Map, ip net.IP, port uint16, window time.Durat
 		Flags uint64
 	}
 
+	mapFD32, err := getMapFDUint32(m.FD())
+	if err != nil {
+		return fmt.Errorf("getMapFDUint32: %w", err)
+	}
 	attr := bpfAttrMapUpdateElem{
-		MapFD: uint32(mapFD),                                   // #nosec G115
-		Key:   uint64(uintptr(unsafe.Pointer(&keyBytes[0]))),   // #nosec G103
-		Value: uint64(uintptr(unsafe.Pointer(&valueBytes[0]))), // #nosec G103
+		MapFD: mapFD32,
+		Key:   uint64(uintptr(unsafe.Pointer(&keyBytes[0]))),
+		Value: uint64(uintptr(unsafe.Pointer(&valueBytes[0]))),
 		Flags: 0,
 	}
 
 	_, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		2,                              //nolint // BPF_MAP_UPDATE_ELEM
-		uintptr(unsafe.Pointer(&attr)), // #nosec G103
+		2, //nolint:mnd // BPF_MAP_UPDATE_ELEM
+		uintptr(unsafe.Pointer(&attr)),
 		unsafe.Sizeof(attr),
 	)
 	if errno != 0 {
@@ -77,15 +76,15 @@ func InsertPendingSrcPort(m *ebpf.Map, ip net.IP, port uint16, window time.Durat
 
 	readValueBytes := make([]byte, 8) //nolint:mnd
 	readAttr := bpfAttrMapLookupElem{
-		MapFD: uint32(mapFD),                                       // #nosec G115
-		Key:   uint64(uintptr(unsafe.Pointer(&keyBytes[0]))),       // #nosec G103
-		Value: uint64(uintptr(unsafe.Pointer(&readValueBytes[0]))), // #nosec G103
+		MapFD: mapFD32,
+		Key:   uint64(uintptr(unsafe.Pointer(&keyBytes[0]))),
+		Value: uint64(uintptr(unsafe.Pointer(&readValueBytes[0]))),
 	}
 
 	_, _, readErrno := unix.Syscall(
-		unix.SYS_BPF,                       // ex 321
-		1,                                  // BPF_MAP_LOOKUP_ELEM
-		uintptr(unsafe.Pointer(&readAttr)), // #nosec G103
+		unix.SYS_BPF, // ex 321
+		1,            // BPF_MAP_LOOKUP_ELEM
+		uintptr(unsafe.Pointer(&readAttr)),
 		unsafe.Sizeof(readAttr),
 	)
 

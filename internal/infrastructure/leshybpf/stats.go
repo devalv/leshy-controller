@@ -20,7 +20,7 @@ func readCountersFromStatsMap(m *ciliumebpf.Map) (filter.Counters, error) {
 	}
 
 	// ожидаем минимум 10 * 8 байт = 80 байт
-	if info.ValueSize < 80 { //nolint
+	if info.ValueSize < 80 { //nolint:mnd
 		return filter.Counters{}, fmt.Errorf("invalid stats value size: expected >=80, got %d", info.ValueSize)
 	}
 
