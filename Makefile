@@ -7,19 +7,33 @@ fmt:
 	gofmt -w -s ./cmd ./internal
 	gofumpt -w ./cmd ./internal
 	goimports -w ./cmd ./internal
-	golangci-lint run
+	golangci-lint run --fix
 
 test:
-	go test ./... -race
+	docker run --rm \
+		-v $(PWD):/app \
+		-w /app \
+		golang:1.25-alpine \
+		sh -c "go mod download && go test -v ./..."
 
-# cover:
-# 	go test ./... -race -cover
+cover:
+	docker run --rm \
+		-v $(PWD):/app \
+		-w /app \
+		golang:1.25-alpine \
+		sh -c "go mod download && go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out"
 
 build:
 	$(MAKE) fmt
-	go build -o application ./cmd/app
+	go env -w CGO_ENABLED=0
+	go env -w GOOS=linux
+	go env -w GOARCH=amd64
+	go build -o controller-app ./cmd/controller
 
 run:
-	go run ./cmd/app --config ./config.yml
+	go run ./cmd --config ./config.yml
 
-.PHONY: setup fmt test build
+clean:
+	docker system prune -f
+
+.PHONY: setup fmt test build cover github-build run clean

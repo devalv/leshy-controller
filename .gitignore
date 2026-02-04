@@ -39,5 +39,6 @@ config.yml
 *.log
 
 # Build artifacts
-application
 l4_filter.o
+controller-app
+leshy-controller
