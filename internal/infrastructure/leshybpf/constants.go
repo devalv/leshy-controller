@@ -1,10 +1,11 @@
 package leshybpf
 
+// Имя мапы не может превышать 15 символов!
 const (
 	PendingSrcMapName   = "l4_pending_src"
 	StatsMapName        = "l4_stats"
 	ActiveFlowsMapName  = "l4_active_flows"
-	GuardedPortsMapName = "l4_guarded_ports"
+	GuardedPortsMapName = "l4_guarded_port"
 	LogsMapName         = "l4_logs"
 
 	ProgramName   = "l4_filter"

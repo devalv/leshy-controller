@@ -35,6 +35,7 @@ struct flow5_key
     __u16 pad2;
 };
 
+// !Имя мапы не может превышать 15 символов!
 // Мапа активных потоков
 struct
 {
@@ -63,7 +64,7 @@ struct
     __type(key, __u16); // порт в сетевом порядке байт
     __type(value, __u8);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
-} l4_guarded_ports SEC(".maps");
+} l4_guarded_port SEC(".maps");
 
 // Статистика
 struct stats_val
@@ -305,7 +306,7 @@ l4_filter(struct __sk_buff* skb)
 
     // Проверяем, защищен ли порт назначения
     // ВАЖНО: делаем lookup один раз и используем результат везде
-    __u8* guarded_port_value = bpf_map_lookup_elem(&l4_guarded_ports, &dest_port);
+    __u8* guarded_port_value = bpf_map_lookup_elem(&l4_guarded_port, &dest_port);
     int port_guarded = (guarded_port_value != NULL);
 
     if (!port_guarded) {
