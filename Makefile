@@ -36,4 +36,4 @@ run:
 clean:
 	docker system prune -f
 
-.PHONY: setup fmt test build
+.PHONY: setup fmt test build cover github-build run clean
