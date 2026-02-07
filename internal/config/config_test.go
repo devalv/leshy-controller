@@ -528,7 +528,7 @@ func TestValidateGuardedPortsRange(t *testing.T) {
 
 // Tests for validateHandshakeWindowSecs
 
-func TestValidateHandshakeWindowSecs(t *testing.T) {
+func TestValidateHandshakeWindowSec(t *testing.T) {
 	tests := []struct {
 		name        string
 		secs        int
@@ -612,6 +612,12 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	validSettingsDB := filepath.Join(tmpDir, "settings.db")
+	err = os.WriteFile(validSettingsDB, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Get a real interface
 	realInterface := "lo"
 
@@ -624,40 +630,43 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "valid config",
 			config: Config{
-				BPFProgramPath:      validBPF,
-				BPFPinPath:          tmpDir,
-				Iface:               realInterface,
-				APIListenAddr:       "127.0.0.1:9090",
-				GuardedPortsRange:   "1024-2048",
-				HandshakeWindowSecs: 30,
-				ShutdownTimeout:     5,
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				SettingsDBPath:     validSettingsDB,
+				Iface:              realInterface,
+				APIListenAddr:      "127.0.0.1:9090",
+				GuardedPortsRange:  "1024-2048",
+				HandshakeWindowSec: 30,
+				ShutdownTimeoutSec: 5,
 			},
 			wantErr: false,
 		},
 		{
 			name: "multiple errors",
 			config: Config{
-				BPFProgramPath:      "",
-				BPFPinPath:          "",
-				Iface:               "",
-				APIListenAddr:       "invalid",
-				GuardedPortsRange:   "invalid",
-				HandshakeWindowSecs: 0,
-				ShutdownTimeout:     0,
+				BPFProgramPath:     "",
+				BPFPinPath:         "",
+				Iface:              "",
+				APIListenAddr:      "invalid",
+				GuardedPortsRange:  "invalid",
+				HandshakeWindowSec: 0,
+				ShutdownTimeoutSec: 0,
+				SettingsDBPath:     "",
 			},
 			wantErr:  true,
-			errCount: 7, // all fields invalid
+			errCount: 8, // all fields invalid
 		},
 		{
 			name: "invalid BPF path only",
 			config: Config{
-				BPFProgramPath:      "",
-				BPFPinPath:          tmpDir,
-				Iface:               realInterface,
-				APIListenAddr:       "127.0.0.1:9090",
-				GuardedPortsRange:   "1024-2048",
-				HandshakeWindowSecs: 30,
-				ShutdownTimeout:     5,
+				BPFProgramPath:     "",
+				BPFPinPath:         tmpDir,
+				Iface:              realInterface,
+				APIListenAddr:      "127.0.0.1:9090",
+				GuardedPortsRange:  "1024-2048",
+				HandshakeWindowSec: 30,
+				ShutdownTimeoutSec: 5,
+				SettingsDBPath:     validSettingsDB,
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -665,13 +674,14 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "invalid port range only",
 			config: Config{
-				BPFProgramPath:      validBPF,
-				BPFPinPath:          tmpDir,
-				Iface:               realInterface,
-				APIListenAddr:       "127.0.0.1:9090",
-				GuardedPortsRange:   "100-200", // invalid (starts at 100 < 1023)
-				HandshakeWindowSecs: 30,
-				ShutdownTimeout:     5,
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				Iface:              realInterface,
+				APIListenAddr:      "127.0.0.1:9090",
+				GuardedPortsRange:  "100-200", // invalid (starts at 100 < 1023)
+				HandshakeWindowSec: 30,
+				ShutdownTimeoutSec: 5,
+				SettingsDBPath:     validSettingsDB,
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -679,13 +689,14 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "invalid handshake window",
 			config: Config{
-				BPFProgramPath:      validBPF,
-				BPFPinPath:          tmpDir,
-				Iface:               realInterface,
-				APIListenAddr:       "127.0.0.1:9090",
-				GuardedPortsRange:   "1024-2048",
-				HandshakeWindowSecs: 10801, // > 3 hours
-				ShutdownTimeout:     5,
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				Iface:              realInterface,
+				APIListenAddr:      "127.0.0.1:9090",
+				GuardedPortsRange:  "1024-2048",
+				HandshakeWindowSec: 10801, // > 3 hours
+				ShutdownTimeoutSec: 5,
+				SettingsDBPath:     validSettingsDB,
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -693,14 +704,29 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "invalid shutdown timeout",
 			config: Config{
-				BPFProgramPath:      validBPF,
-				BPFPinPath:          tmpDir,
-				Iface:               realInterface,
-				APIListenAddr:       "127.0.0.1:9090",
-				GuardedPortsRange:   "1024-2048",
-				HandshakeWindowSecs: 30,
-				ShutdownTimeout:     61, // > 61 secs
-
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				Iface:              realInterface,
+				APIListenAddr:      "127.0.0.1:9090",
+				GuardedPortsRange:  "1024-2048",
+				HandshakeWindowSec: 30,
+				ShutdownTimeoutSec: 61, // > 61 secs
+				SettingsDBPath:     validSettingsDB,
+			},
+			wantErr:  true,
+			errCount: 1,
+		},
+		{
+			name: "invalid settings DB path only",
+			config: Config{
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				Iface:              realInterface,
+				APIListenAddr:      "127.0.0.1:9090",
+				GuardedPortsRange:  "1024-2048",
+				HandshakeWindowSec: 30,
+				ShutdownTimeoutSec: 5,
+				SettingsDBPath:     "", // bad path
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -922,8 +948,9 @@ bpf_pin_path: /sys/fs/bpf/
 iface: lo
 api_listen_addr: 127.0.0.1:9090
 guarded_ports_range: 1024-2048
-handshake_window_secs: 30
-shutdown_timeout: 5
+handshake_window_sec: 30
+shutdown_timeout_sec: 5
+db_path: ./leshy-db.db
 `
 
 	// Create temp directory and file structure
@@ -950,6 +977,13 @@ shutdown_timeout: 5
 		t.Fatal(err)
 	}
 
+	// Create DB settings file
+	dbFile := filepath.Join(tmpDir, "leshy-db.db")
+	err = os.WriteFile(dbFile, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Update config content with actual paths
 	configContent = `
 debug: true
@@ -958,8 +992,9 @@ bpf_pin_path: ` + bpfPinDir + `
 iface: lo
 api_listen_addr: 127.0.0.1:9090
 guarded_ports_range: 1024-2048
-handshake_window_secs: 30
-shutdown_timeout: 5
+handshake_window_sec: 30
+shutdown_timeout_sec: 5
+db_path: ` + dbFile + `
 `
 
 	err = os.WriteFile(configFile, []byte(configContent), 0o644)
@@ -990,12 +1025,79 @@ shutdown_timeout: 5
 	if cfg.ConfigPath != configFile {
 		t.Errorf("ConfigPath = %s, want %s", cfg.ConfigPath, configFile)
 	}
-	if cfg.ShutdownTimeout != 5 {
-		t.Errorf("ShutdownTimeout = %d, want %d", cfg.ShutdownTimeout, 5)
+	if cfg.ShutdownTimeoutSec != 5 {
+		t.Errorf("ShutdownTimeoutSec = %d, want %d", cfg.ShutdownTimeoutSec, 5)
 	}
 }
 
 // Helper function to check if string contains substring
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
+}
+
+// Tests for validateDBSettignsPath
+
+func TestValidateSettingsDBPath(t *testing.T) {
+	tmpDir := createTempDir(t)
+	defer os.RemoveAll(tmpDir)
+
+	validSettingsDB := filepath.Join(tmpDir, "leshy-controller.db")
+	err := os.WriteFile(validSettingsDB, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		path        string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:        "empty path",
+			path:        "",
+			wantErr:     true,
+			errContains: "settings DB path cannot be empty",
+		},
+		{
+			name:    "valid settings DB program",
+			path:    validSettingsDB,
+			wantErr: false,
+		},
+		{
+			name:    "non-existent file is allowed",
+			path:    filepath.Join(tmpDir, "new-settings.db"),
+			wantErr: false,
+		},
+		{
+			name:        "directory instead of file",
+			path:        tmpDir,
+			wantErr:     true,
+			errContains: "is a directory, not a file",
+		},
+		{
+			name:        "parent path is a file",
+			path:        filepath.Join(validSettingsDB, "child.db"),
+			wantErr:     true,
+			errContains: "not a directory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSettingsDBPath(tt.path)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
 }

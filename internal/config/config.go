@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/rs/zerolog"
@@ -16,14 +17,15 @@ import (
 )
 
 type Config struct {
-	Debug               bool   `yaml:"debug"`
-	BPFProgramPath      string `yaml:"bpf_program_path"`
-	BPFPinPath          string `yaml:"bpf_pin_path"`
-	Iface               string `yaml:"iface"`
-	APIListenAddr       string `yaml:"api_listen_addr"`
-	GuardedPortsRange   string `yaml:"guarded_ports_range"`
-	HandshakeWindowSecs int    `yaml:"handshake_window_secs"`
-	ShutdownTimeout     int    `yaml:"shutdown_timeout"`
+	Debug              bool   `yaml:"debug"`
+	BPFProgramPath     string `yaml:"bpf_program_path"`
+	BPFPinPath         string `yaml:"bpf_pin_path"`
+	SettingsDBPath     string `yaml:"db_path"`
+	Iface              string `yaml:"iface"`
+	APIListenAddr      string `yaml:"api_listen_addr"`
+	GuardedPortsRange  string `yaml:"guarded_ports_range"`
+	HandshakeWindowSec int    `yaml:"handshake_window_sec"`
+	ShutdownTimeoutSec int    `yaml:"shutdown_timeout_sec"`
 
 	ConfigPath string
 }
@@ -225,11 +227,11 @@ func validateHandshakeWindowSecs(secs int) error {
 		maxHandshakeWindowSecs = 10800
 	)
 	if secs < minHandshakeWindowSecs {
-		return fmt.Errorf("HandshakeWindowSecs must be at least 1, got %d", secs)
+		return fmt.Errorf("HandshakeWindowSec must be at least 1, got %d", secs)
 	}
 
 	if secs > maxHandshakeWindowSecs {
-		return fmt.Errorf("HandshakeWindowSecs cannot exceed 10800 seconds (3 hours), got %d", secs)
+		return fmt.Errorf("HandshakeWindowSec cannot exceed 10800 seconds (3 hours), got %d", secs)
 	}
 
 	return nil
@@ -242,10 +244,50 @@ func validateShutdownTimeout(secs int) error {
 		maxShutdownTimeoutSecs = 60
 	)
 	if secs < minShutdownTimeoutSecs {
-		return fmt.Errorf("ShutdownTimeout must be at least 1, got %d", secs)
+		return fmt.Errorf("shutdown_timeout_sec must be at least 1, got %d", secs)
 	}
 	if secs > maxShutdownTimeoutSecs {
-		return fmt.Errorf("ShutdownTimeout cannot exceed 10800 seconds (3 hours), got %d", secs)
+		return fmt.Errorf("shutdown_timeout_sec cannot exceed 10800 seconds (3 hours), got %d", secs)
+	}
+
+	return nil
+}
+
+// Проверяем доступность пути с БД.
+func validateSettingsDBPath(path string) error {
+	if path == "" {
+		return errors.New("settings DB path cannot be empty")
+	}
+
+	s, err := os.Stat(path)
+	if err == nil {
+		// Проверяем, что это не директория
+		if s.IsDir() {
+			return fmt.Errorf("'%s' is a directory, not a file", path)
+		}
+
+		return nil
+	}
+
+	if !errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, syscall.ENOTDIR) {
+			return fmt.Errorf("'%s' is not a directory", filepath.Dir(path))
+		}
+
+		return fmt.Errorf("failed to validate DB path: %w", err)
+	}
+
+	parentDir := filepath.Dir(path)
+	if parentDir == "." || parentDir == "" {
+		return nil
+	}
+
+	parentStat, parentErr := os.Stat(parentDir)
+	if parentErr == nil && !parentStat.IsDir() {
+		return fmt.Errorf("'%s' is not a directory", parentDir)
+	}
+	if parentErr != nil && !errors.Is(parentErr, os.ErrNotExist) {
+		return fmt.Errorf("failed to validate DB parent directory: %w", parentErr)
 	}
 
 	return nil
@@ -309,12 +351,16 @@ func (cfg *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("GuardedPortsRange: %w", err))
 	}
 
-	if err := validateHandshakeWindowSecs(cfg.HandshakeWindowSecs); err != nil {
-		errs = append(errs, fmt.Errorf("HandshakeWindowSecs: %w", err))
+	if err := validateHandshakeWindowSecs(cfg.HandshakeWindowSec); err != nil {
+		errs = append(errs, fmt.Errorf("HandshakeWindowSec: %w", err))
 	}
 
-	if err := validateShutdownTimeout(cfg.ShutdownTimeout); err != nil {
-		errs = append(errs, fmt.Errorf("ShutdownTimeout: %w", err))
+	if err := validateShutdownTimeout(cfg.ShutdownTimeoutSec); err != nil {
+		errs = append(errs, fmt.Errorf("ShutdownTimeoutSec: %w", err))
+	}
+
+	if err := validateSettingsDBPath(cfg.SettingsDBPath); err != nil {
+		errs = append(errs, fmt.Errorf("SettingsDBPath: %w", err))
 	}
 
 	// Объединяем все ошибки в одну

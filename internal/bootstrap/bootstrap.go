@@ -12,8 +12,11 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 
 	"github.com/devalv/leshy-controller/internal/application/filter"
+	"github.com/devalv/leshy-controller/internal/application/management"
 	"github.com/devalv/leshy-controller/internal/config"
 	leshybpf "github.com/devalv/leshy-controller/internal/infrastructure/leshybpf"
+	sqliteinfra "github.com/devalv/leshy-controller/internal/infrastructure/sqlite"
+	sqlitemigrations "github.com/devalv/leshy-controller/internal/infrastructure/sqlite/migrations"
 	httpserver "github.com/devalv/leshy-controller/internal/interfaces/rest/httpserver"
 	restrouter "github.com/devalv/leshy-controller/internal/interfaces/rest/router"
 	v1 "github.com/devalv/leshy-controller/internal/interfaces/rest/v1"
@@ -63,14 +66,45 @@ func New(ctx context.Context, cfg *config.Config) (*runtime.Application, error) 
 	backend := leshybpf.NewFilterBackend(pendingMap, guardedPortsMap, statsMap)
 
 	filterSvc := filter.New(backend, filter.Options{
-		Window: time.Duration(cfg.HandshakeWindowSecs) * time.Second,
+		Window: time.Duration(cfg.HandshakeWindowSec) * time.Second,
 		Debug:  cfg.Debug,
 	})
+	settingsDB, err := sqliteinfra.Open(ctx, cfg.SettingsDBPath)
+	if err != nil {
+		_ = mgr.Close()
+
+		return nil, fmt.Errorf("open settings db: %w", err)
+	}
+
+	migrationRunner, err := sqlitemigrations.NewEmbeddedRunner(settingsDB)
+	if err != nil {
+		_ = mgr.Close()
+		_ = settingsDB.Close()
+
+		return nil, fmt.Errorf("initialize sqlite migrations runner: %w", err)
+	}
+
+	if err := migrationRunner.Up(ctx); err != nil {
+		_ = mgr.Close()
+		_ = settingsDB.Close()
+
+		return nil, fmt.Errorf("apply sqlite migrations: %w", err)
+	}
+
+	managementRepo, err := sqliteinfra.NewManagementSettingsRepository(settingsDB)
+	if err != nil {
+		_ = mgr.Close()
+		_ = settingsDB.Close()
+
+		return nil, fmt.Errorf("initialize management settings repository: %w", err)
+	}
+	managementSvc := management.New(managementRepo)
 
 	// --- HTTP handlers (v1) ---
 	v1mux := http.NewServeMux()
 	v1.Register(v1mux, v1.Deps{
-		Filter: filterSvc,
+		Filter:     filterSvc,
+		Management: managementSvc,
 	})
 
 	// --- REST router ---
@@ -89,13 +123,19 @@ func New(ctx context.Context, cfg *config.Config) (*runtime.Application, error) 
 
 		return mgr.Close()
 	})
+	managementDBCloser := runtime.NewCloserServer("managementdb", func(stopCtx context.Context) error {
+		_ = stopCtx // close сигнатура оставлена контекстной для единообразия runtime.Server.
+
+		return managementRepo.Close()
+	})
 
 	application := runtime.NewApplication(
 		runtime.Options{
-			ShutdownTimeout: time.Duration(cfg.ShutdownTimeout) * time.Second,
+			ShutdownTimeout: time.Duration(cfg.ShutdownTimeoutSec) * time.Second,
 		},
 		httpSrv,
 		closer,
+		managementDBCloser,
 	)
 
 	return application, nil
