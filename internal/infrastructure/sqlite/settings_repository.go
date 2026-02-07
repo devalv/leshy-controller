@@ -30,10 +30,22 @@ func (r *ManagementSettingsRepository) SaveSettings(
 	settings management.Settings,
 ) (management.StoredSettings, error) {
 	const saveSQL = `
-INSERT INTO management_settings (id, token, guarded_ports_range, iface, updated_at_unix)
-VALUES (1, ?, ?, ?, CAST(strftime('%s', 'now') AS INTEGER))
+INSERT INTO management_settings (
+	id,
+	issuer,
+	audience,
+	jwks_url,
+	required_scope,
+	guarded_ports_range,
+	iface,
+	updated_at_unix
+)
+VALUES (1, ?, ?, ?, ?, ?, ?, CAST(strftime('%s', 'now') AS INTEGER))
 ON CONFLICT(id) DO UPDATE SET
-	token = excluded.token,
+	issuer = excluded.issuer,
+	audience = excluded.audience,
+	jwks_url = excluded.jwks_url,
+	required_scope = excluded.required_scope,
 	guarded_ports_range = excluded.guarded_ports_range,
 	iface = excluded.iface,
 	updated_at_unix = CAST(strftime('%s', 'now') AS INTEGER);
@@ -42,7 +54,10 @@ ON CONFLICT(id) DO UPDATE SET
 	if _, err := r.db.ExecContext(
 		ctx,
 		saveSQL,
-		settings.Token,
+		settings.Issuer,
+		settings.Audience,
+		settings.JWKSURL,
+		settings.RequiredScope,
 		settings.GuardedPortsRange,
 		settings.Iface,
 	); err != nil {
@@ -60,20 +75,26 @@ ON CONFLICT(id) DO UPDATE SET
 // LoadSettings reads stored management settings.
 func (r *ManagementSettingsRepository) LoadSettings(ctx context.Context) (management.StoredSettings, error) {
 	const loadSQL = `
-SELECT token, guarded_ports_range, iface, updated_at_unix
+SELECT issuer, audience, jwks_url, required_scope, guarded_ports_range, iface, updated_at_unix
 FROM management_settings
 WHERE id = 1;
 `
 
 	var (
-		token             string
+		issuer            string
+		audience          string
+		jwksURL           string
+		requiredScope     string
 		guardedPortsRange string
 		iface             string
 		updatedAtUnix     int64
 	)
 
 	if err := r.db.QueryRowContext(ctx, loadSQL).Scan(
-		&token,
+		&issuer,
+		&audience,
+		&jwksURL,
+		&requiredScope,
 		&guardedPortsRange,
 		&iface,
 		&updatedAtUnix,
@@ -87,7 +108,10 @@ WHERE id = 1;
 
 	return management.StoredSettings{
 		Settings: management.Settings{
-			Token:             token,
+			Issuer:            issuer,
+			Audience:          audience,
+			JWKSURL:           jwksURL,
+			RequiredScope:     requiredScope,
 			GuardedPortsRange: guardedPortsRange,
 			Iface:             iface,
 		},

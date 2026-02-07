@@ -2,9 +2,12 @@ package management
 
 import "time"
 
-// Settings describes management token settings passed by external systems.
+// Settings describes management authorization settings passed by external systems.
 type Settings struct {
-	Token             string
+	Issuer            string
+	Audience          string
+	JWKSURL           string
+	RequiredScope     string
 	GuardedPortsRange string
 	Iface             string
 }

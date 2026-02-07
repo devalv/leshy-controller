@@ -13,11 +13,15 @@ import (
 )
 
 type managementUseCaseStub struct {
-	saveCalls int
-	getCalls  int
-	saved     management.Settings
-	saveFn    func(ctx context.Context, settings management.Settings) (management.StoredSettings, error)
-	getFn     func(ctx context.Context) (management.StoredSettings, error)
+	saveCalls               int
+	getCalls                int
+	authorizeCalls          int
+	bootstrapAuthorizeCalls int
+	saved                   management.Settings
+	saveFn                  func(ctx context.Context, settings management.Settings) (management.StoredSettings, error)
+	getFn                   func(ctx context.Context) (management.StoredSettings, error)
+	authorizeFn             func(ctx context.Context, accessToken string) error
+	authorizeSettingsFn     func(ctx context.Context, bootstrapToken string) error
 }
 
 func (s *managementUseCaseStub) SaveSettings(
@@ -44,12 +48,33 @@ func (s *managementUseCaseStub) GetSettings(ctx context.Context) (management.Sto
 
 	return management.StoredSettings{
 		Settings: management.Settings{
-			Token:             "secret",
+			Issuer:            "https://auth.example.com",
+			Audience:          "leshy-controller",
+			JWKSURL:           "https://auth.example.com/jwks.json",
+			RequiredScope:     "allow:write",
 			GuardedPortsRange: "3389-3391",
 			Iface:             "eth0",
 		},
 		UpdatedAt: time.Date(2026, time.January, 10, 12, 0, 0, 0, time.UTC),
 	}, nil
+}
+
+func (s *managementUseCaseStub) AuthorizeAllow(ctx context.Context, accessToken string) error {
+	s.authorizeCalls++
+	if s.authorizeFn != nil {
+		return s.authorizeFn(ctx, accessToken)
+	}
+
+	return nil
+}
+
+func (s *managementUseCaseStub) AuthorizeSettingsBootstrap(ctx context.Context, bootstrapToken string) error {
+	s.bootstrapAuthorizeCalls++
+	if s.authorizeSettingsFn != nil {
+		return s.authorizeSettingsFn(ctx, bootstrapToken)
+	}
+
+	return nil
 }
 
 func TestManagementSettingsPostEndpoint(t *testing.T) {
@@ -58,63 +83,120 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 	internalErr := errors.New("db failed")
 
 	tests := []struct {
-		name             string
-		method           string
-		body             string
-		useCaseErr       error
-		wantStatus       int
-		wantBodyContains string
-		wantSaveCalls    int
+		name               string
+		method             string
+		body               string
+		bootstrapHeader    string
+		bootstrapErr       error
+		useCaseErr         error
+		wantStatus         int
+		wantBodyContains   string
+		wantSaveCalls      int
+		wantBootstrapCalls int
 	}{
 		{
-			name:             "method not allowed",
-			method:           http.MethodDelete,
-			body:             "",
-			wantStatus:       http.StatusMethodNotAllowed,
-			wantBodyContains: "Method not allowed",
-			wantSaveCalls:    0,
+			name:               "method not allowed",
+			method:             http.MethodDelete,
+			body:               "",
+			wantStatus:         http.StatusMethodNotAllowed,
+			wantBodyContains:   "Method not allowed",
+			wantSaveCalls:      0,
+			wantBootstrapCalls: 0,
 		},
 		{
-			name:             "invalid json",
-			method:           http.MethodPost,
-			body:             "{",
-			wantStatus:       http.StatusBadRequest,
-			wantBodyContains: "Invalid JSON",
-			wantSaveCalls:    0,
+			name:               "missing bootstrap header",
+			method:             http.MethodPost,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			bootstrapErr:       management.ErrInvalidBootstrapToken,
+			wantStatus:         http.StatusUnauthorized,
+			wantBodyContains:   "Unauthorized",
+			wantSaveCalls:      0,
+			wantBootstrapCalls: 1,
 		},
 		{
-			name:             "missing token",
-			method:           http.MethodPost,
-			body:             `{"guarded_ports_range":"3389-3391","iface":"eth0"}`,
-			wantStatus:       http.StatusBadRequest,
-			wantBodyContains: "token is required",
-			wantSaveCalls:    0,
+			name:               "invalid bootstrap token",
+			method:             http.MethodPost,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			bootstrapHeader:    "bad-token",
+			bootstrapErr:       management.ErrInvalidBootstrapToken,
+			wantStatus:         http.StatusUnauthorized,
+			wantBodyContains:   "Unauthorized",
+			wantSaveCalls:      0,
+			wantBootstrapCalls: 1,
 		},
 		{
-			name:             "domain validation error",
-			method:           http.MethodPost,
-			body:             `{"token":"abc","guarded_ports_range":"3389-3391","iface":"eth0"}`,
-			useCaseErr:       management.ErrInvalidGuardedPortsRange,
-			wantStatus:       http.StatusBadRequest,
-			wantBodyContains: "invalid guarded ports range",
-			wantSaveCalls:    1,
+			name:               "bootstrap is locked after pairing",
+			method:             http.MethodPost,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			bootstrapHeader:    "bootstrap",
+			bootstrapErr:       management.ErrBootstrapLocked,
+			wantStatus:         http.StatusConflict,
+			wantBodyContains:   "management settings are locked",
+			wantSaveCalls:      0,
+			wantBootstrapCalls: 1,
 		},
 		{
-			name:             "internal usecase error",
-			method:           http.MethodPost,
-			body:             `{"token":"abc","guarded_ports_range":"3389-3391","iface":"eth0"}`,
-			useCaseErr:       internalErr,
-			wantStatus:       http.StatusInternalServerError,
-			wantBodyContains: "failed to save management settings",
-			wantSaveCalls:    1,
+			name:               "bootstrap is not configured",
+			method:             http.MethodPost,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			bootstrapHeader:    "bootstrap",
+			bootstrapErr:       management.ErrBootstrapNotConfigured,
+			wantStatus:         http.StatusServiceUnavailable,
+			wantBodyContains:   "management bootstrap is not configured",
+			wantSaveCalls:      0,
+			wantBootstrapCalls: 1,
 		},
 		{
-			name:             "success",
-			method:           http.MethodPost,
-			body:             `{"token":"abc","guarded_ports_range":"3389-3391","iface":"eth0"}`,
-			wantStatus:       http.StatusOK,
-			wantBodyContains: `"message":"Management settings saved"`,
-			wantSaveCalls:    1,
+			name:               "invalid json",
+			method:             http.MethodPost,
+			body:               "{",
+			bootstrapHeader:    "bootstrap",
+			wantStatus:         http.StatusBadRequest,
+			wantBodyContains:   "Invalid JSON",
+			wantSaveCalls:      0,
+			wantBootstrapCalls: 1,
+		},
+		{
+			name:               "missing issuer",
+			method:             http.MethodPost,
+			body:               `{"audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			bootstrapHeader:    "bootstrap",
+			wantStatus:         http.StatusBadRequest,
+			wantBodyContains:   "issuer is required",
+			wantSaveCalls:      0,
+			wantBootstrapCalls: 1,
+		},
+		{
+			name:               "domain validation error",
+			method:             http.MethodPost,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			bootstrapHeader:    "bootstrap",
+			useCaseErr:         management.ErrInvalidGuardedPortsRange,
+			wantStatus:         http.StatusBadRequest,
+			wantBodyContains:   "invalid guarded ports range",
+			wantSaveCalls:      1,
+			wantBootstrapCalls: 1,
+		},
+		{
+			name:               "internal usecase error",
+			method:             http.MethodPost,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			bootstrapHeader:    "bootstrap",
+			useCaseErr:         internalErr,
+			wantStatus:         http.StatusInternalServerError,
+			wantBodyContains:   "failed to save management settings",
+			wantSaveCalls:      1,
+			wantBootstrapCalls: 1,
+		},
+		{
+			name:               "success",
+			method:             http.MethodPost,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			bootstrapHeader:    "bootstrap",
+			wantStatus:         http.StatusOK,
+			wantBodyContains:   `"message":"Management settings saved"`,
+			wantSaveCalls:      1,
+			wantBootstrapCalls: 1,
 		},
 	}
 
@@ -124,6 +206,13 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 			t.Parallel()
 
 			stub := &managementUseCaseStub{
+				authorizeSettingsFn: func(context.Context, string) error {
+					if tt.bootstrapErr != nil {
+						return tt.bootstrapErr
+					}
+
+					return nil
+				},
 				saveFn: func(
 					context.Context,
 					management.Settings,
@@ -134,7 +223,10 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 
 					return management.StoredSettings{
 						Settings: management.Settings{
-							Token:             "abc",
+							Issuer:            "https://auth.example.com",
+							Audience:          "leshy-controller",
+							JWKSURL:           "https://auth.example.com/jwks.json",
+							RequiredScope:     "allow:write",
 							GuardedPortsRange: "3389-3391",
 							Iface:             "eth0",
 						},
@@ -149,6 +241,9 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 			})
 
 			request := httptest.NewRequest(tt.method, "/management/settings", strings.NewReader(tt.body))
+			if tt.bootstrapHeader != "" {
+				request.Header.Set(settingsBootstrapHeader, tt.bootstrapHeader)
+			}
 			response := httptest.NewRecorder()
 			mux.ServeHTTP(response, request)
 
@@ -162,6 +257,9 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 
 			if stub.saveCalls != tt.wantSaveCalls {
 				t.Fatalf("save calls = %d, want %d", stub.saveCalls, tt.wantSaveCalls)
+			}
+			if stub.bootstrapAuthorizeCalls != tt.wantBootstrapCalls {
+				t.Fatalf("bootstrap authorize calls = %d, want %d", stub.bootstrapAuthorizeCalls, tt.wantBootstrapCalls)
 			}
 		})
 	}
@@ -193,7 +291,7 @@ func TestManagementSettingsGetEndpoint(t *testing.T) {
 		{
 			name:             "success",
 			wantStatus:       http.StatusOK,
-			wantBodyContains: `"token_configured":true`,
+			wantBodyContains: `"auth_configured":true`,
 		},
 	}
 
@@ -210,7 +308,10 @@ func TestManagementSettingsGetEndpoint(t *testing.T) {
 
 					return management.StoredSettings{
 						Settings: management.Settings{
-							Token:             "secret",
+							Issuer:            "https://auth.example.com",
+							Audience:          "leshy-controller",
+							JWKSURL:           "https://auth.example.com/jwks.json",
+							RequiredScope:     "allow:write",
 							GuardedPortsRange: "3389-3391",
 							Iface:             "eth0",
 						},

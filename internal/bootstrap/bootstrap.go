@@ -14,6 +14,7 @@ import (
 	"github.com/devalv/leshy-controller/internal/application/filter"
 	"github.com/devalv/leshy-controller/internal/application/management"
 	"github.com/devalv/leshy-controller/internal/config"
+	"github.com/devalv/leshy-controller/internal/infrastructure/jwtauth"
 	leshybpf "github.com/devalv/leshy-controller/internal/infrastructure/leshybpf"
 	sqliteinfra "github.com/devalv/leshy-controller/internal/infrastructure/sqlite"
 	sqlitemigrations "github.com/devalv/leshy-controller/internal/infrastructure/sqlite/migrations"
@@ -98,7 +99,10 @@ func New(ctx context.Context, cfg *config.Config) (*runtime.Application, error) 
 
 		return nil, fmt.Errorf("initialize management settings repository: %w", err)
 	}
-	managementSvc := management.New(managementRepo)
+	managementVerifier := jwtauth.NewVerifier(jwtauth.VerifierOptions{})
+	managementSvc := management.New(managementRepo, managementVerifier, management.Options{
+		BootstrapToken: cfg.ManagementBootstrapToken,
+	})
 
 	// --- HTTP handlers (v1) ---
 	v1mux := http.NewServeMux()

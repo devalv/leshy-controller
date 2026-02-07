@@ -36,7 +36,10 @@ func TestManagementSettingsRepositorySaveSettings(t *testing.T) {
 		{
 			name: "insert initial settings",
 			settings: management.Settings{
-				Token:             "token-v1",
+				Issuer:            "https://auth-v1.example.com",
+				Audience:          "leshy-controller",
+				JWKSURL:           "https://auth-v1.example.com/jwks.json",
+				RequiredScope:     "allow:write",
 				GuardedPortsRange: "3389-3391",
 				Iface:             "ens18",
 			},
@@ -44,7 +47,10 @@ func TestManagementSettingsRepositorySaveSettings(t *testing.T) {
 		{
 			name: "update existing settings",
 			settings: management.Settings{
-				Token:             "token-v2",
+				Issuer:            "https://auth-v2.example.com",
+				Audience:          "leshy-controller",
+				JWKSURL:           "https://auth-v2.example.com/jwks.json",
+				RequiredScope:     "allow:write",
 				GuardedPortsRange: "3392-3399",
 				Iface:             "ens19",
 			},
@@ -59,8 +65,17 @@ func TestManagementSettingsRepositorySaveSettings(t *testing.T) {
 				t.Fatalf("save settings: %v", saveErr)
 			}
 
-			if stored.Token != tt.settings.Token {
-				t.Fatalf("stored token = %q, want %q", stored.Token, tt.settings.Token)
+			if stored.Issuer != tt.settings.Issuer {
+				t.Fatalf("stored issuer = %q, want %q", stored.Issuer, tt.settings.Issuer)
+			}
+			if stored.Audience != tt.settings.Audience {
+				t.Fatalf("stored audience = %q, want %q", stored.Audience, tt.settings.Audience)
+			}
+			if stored.JWKSURL != tt.settings.JWKSURL {
+				t.Fatalf("stored jwks URL = %q, want %q", stored.JWKSURL, tt.settings.JWKSURL)
+			}
+			if stored.RequiredScope != tt.settings.RequiredScope {
+				t.Fatalf("stored required scope = %q, want %q", stored.RequiredScope, tt.settings.RequiredScope)
 			}
 			if stored.GuardedPortsRange != tt.settings.GuardedPortsRange {
 				t.Fatalf(
@@ -80,8 +95,8 @@ func TestManagementSettingsRepositorySaveSettings(t *testing.T) {
 			if loadErr != nil {
 				t.Fatalf("load settings: %v", loadErr)
 			}
-			if loaded.Token != tt.settings.Token {
-				t.Fatalf("loaded token = %q, want %q", loaded.Token, tt.settings.Token)
+			if loaded.Issuer != tt.settings.Issuer {
+				t.Fatalf("loaded issuer = %q, want %q", loaded.Issuer, tt.settings.Issuer)
 			}
 		})
 	}

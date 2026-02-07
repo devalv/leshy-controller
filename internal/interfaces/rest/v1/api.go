@@ -20,9 +20,11 @@ type Deps struct {
 	Management management.UseCase
 }
 
+const settingsBootstrapHeader = "X-Bootstrap-Token"
+
 func Register(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("/stats", makeStatsHandler(d.Filter))
-	mux.HandleFunc("/allow", makeAllowHandler(d.Filter))
+	mux.HandleFunc("/allow", makeAllowHandler(d.Filter, d.Management))
 	mux.HandleFunc("/management/settings", makeManagementSettingsHandler(d.Management))
 }
 
@@ -70,7 +72,7 @@ func makeStatsHandler(filterUseCase filter.UseCase) http.HandlerFunc {
 	}
 }
 
-func makeAllowHandler(filterUseCase filter.UseCase) http.HandlerFunc {
+func makeAllowHandler(filterUseCase filter.UseCase, managementUseCase management.UseCase) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			methodNotAllowed(w, []string{http.MethodPost})
@@ -82,6 +84,35 @@ func makeAllowHandler(filterUseCase filter.UseCase) http.HandlerFunc {
 			http.Error(w, "filter usecase is not configured", http.StatusInternalServerError)
 
 			return
+		}
+		if managementUseCase == nil {
+			http.Error(w, "management settings usecase is not configured", http.StatusInternalServerError)
+
+			return
+		}
+
+		accessToken, err := extractBearerAccessToken(r.Header.Get("Authorization"))
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
+			return
+		}
+		if err := managementUseCase.AuthorizeAllow(r.Context(), accessToken); err != nil {
+			switch {
+			case errors.Is(err, management.ErrInvalidAccessToken):
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
+				return
+			case errors.Is(err, management.ErrSettingsNotFound),
+				errors.Is(err, management.ErrAuthorizationUnavailable):
+				http.Error(w, "Authorization is unavailable", http.StatusServiceUnavailable)
+
+				return
+			default:
+				http.Error(w, "allow authorization failed", http.StatusInternalServerError)
+
+				return
+			}
 		}
 
 		req, err := decodeJSON(r)
@@ -152,6 +183,28 @@ func handleManagementSettingsSave(
 		return
 	}
 
+	bootstrapToken := r.Header.Get(settingsBootstrapHeader)
+	if err := managementUseCase.AuthorizeSettingsBootstrap(r.Context(), bootstrapToken); err != nil {
+		switch {
+		case errors.Is(err, management.ErrInvalidBootstrapToken):
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
+			return
+		case errors.Is(err, management.ErrBootstrapLocked):
+			http.Error(w, "management settings are locked", http.StatusConflict)
+
+			return
+		case errors.Is(err, management.ErrBootstrapNotConfigured):
+			http.Error(w, "management bootstrap is not configured", http.StatusServiceUnavailable)
+
+			return
+		default:
+			http.Error(w, "failed to authorize management settings update", http.StatusInternalServerError)
+
+			return
+		}
+	}
+
 	req, err := decodeManagementSettingsJSON(r)
 	if err != nil {
 		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
@@ -160,13 +213,19 @@ func handleManagementSettingsSave(
 	}
 
 	stored, err := managementUseCase.SaveSettings(r.Context(), management.Settings{
-		Token:             req.Token,
+		Issuer:            req.Issuer,
+		Audience:          req.Audience,
+		JWKSURL:           req.JWKSURL,
+		RequiredScope:     req.RequiredScope,
 		GuardedPortsRange: req.GuardedPortsRange,
 		Iface:             req.Iface,
 	})
 	if err != nil {
 		switch {
-		case errors.Is(err, management.ErrInvalidToken),
+		case errors.Is(err, management.ErrInvalidIssuer),
+			errors.Is(err, management.ErrInvalidAudience),
+			errors.Is(err, management.ErrInvalidJWKSURL),
+			errors.Is(err, management.ErrInvalidRequiredScope),
 			errors.Is(err, management.ErrInvalidGuardedPortsRange),
 			errors.Is(err, management.ErrInvalidIface):
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -181,7 +240,11 @@ func handleManagementSettingsSave(
 
 	resp := restv1.UpsertManagementSettingsResponse{
 		Message:           "Management settings saved",
-		TokenConfigured:   stored.Token != "",
+		AuthConfigured:    stored.Issuer != "" && stored.JWKSURL != "",
+		Issuer:            stored.Issuer,
+		Audience:          stored.Audience,
+		JWKSURL:           stored.JWKSURL,
+		RequiredScope:     stored.RequiredScope,
 		GuardedPortsRange: stored.GuardedPortsRange,
 		Iface:             stored.Iface,
 		UpdatedAt:         stored.UpdatedAt.UTC().Format(time.RFC3339),
@@ -216,7 +279,11 @@ func handleManagementSettingsGet(
 	}
 
 	resp := restv1.GetManagementSettingsResponse{
-		TokenConfigured:   stored.Token != "",
+		AuthConfigured:    stored.Issuer != "" && stored.JWKSURL != "",
+		Issuer:            stored.Issuer,
+		Audience:          stored.Audience,
+		JWKSURL:           stored.JWKSURL,
+		RequiredScope:     stored.RequiredScope,
 		GuardedPortsRange: stored.GuardedPortsRange,
 		Iface:             stored.Iface,
 		UpdatedAt:         stored.UpdatedAt.UTC().Format(time.RFC3339),
@@ -315,8 +382,17 @@ func decodeManagementSettingsJSON(r *http.Request) (restv1.UpsertManagementSetti
 		return req, fmt.Errorf("error with JSON decoding: %w", err)
 	}
 
-	if req.Token == "" {
-		return req, errors.New("token is required")
+	if strings.TrimSpace(req.Issuer) == "" {
+		return req, errors.New("issuer is required")
+	}
+	if strings.TrimSpace(req.Audience) == "" {
+		return req, errors.New("audience is required")
+	}
+	if strings.TrimSpace(req.JWKSURL) == "" {
+		return req, errors.New("jwks_url is required")
+	}
+	if strings.TrimSpace(req.RequiredScope) == "" {
+		return req, errors.New("required_scope is required")
 	}
 	if req.GuardedPortsRange == "" {
 		return req, errors.New("guarded_ports_range is required")
@@ -327,4 +403,27 @@ func decodeManagementSettingsJSON(r *http.Request) (restv1.UpsertManagementSetti
 
 	// TODO: extra validation for incoming Settings
 	return req, nil
+}
+
+func extractBearerAccessToken(headerValue string) (string, error) {
+	header := strings.TrimSpace(headerValue)
+	if header == "" {
+		return "", errors.New("authorization header is required")
+	}
+
+	const authParts = 2
+	parts := strings.SplitN(header, " ", authParts)
+	if len(parts) != authParts {
+		return "", errors.New("authorization header format must be Bearer <token>")
+	}
+	if !strings.EqualFold(parts[0], "Bearer") {
+		return "", errors.New("authorization header scheme must be Bearer")
+	}
+
+	token := strings.TrimSpace(parts[1])
+	if token == "" {
+		return "", errors.New("bearer token is empty")
+	}
+
+	return token, nil
 }

@@ -17,15 +17,16 @@ import (
 )
 
 type Config struct {
-	Debug              bool   `yaml:"debug"`
-	BPFProgramPath     string `yaml:"bpf_program_path"`
-	BPFPinPath         string `yaml:"bpf_pin_path"`
-	SettingsDBPath     string `yaml:"db_path"`
-	Iface              string `yaml:"iface"`
-	APIListenAddr      string `yaml:"api_listen_addr"`
-	GuardedPortsRange  string `yaml:"guarded_ports_range"`
-	HandshakeWindowSec int    `yaml:"handshake_window_sec"`
-	ShutdownTimeoutSec int    `yaml:"shutdown_timeout_sec"`
+	Debug                    bool   `yaml:"debug"`
+	BPFProgramPath           string `yaml:"bpf_program_path"`
+	BPFPinPath               string `yaml:"bpf_pin_path"`
+	SettingsDBPath           string `yaml:"db_path"`
+	ManagementBootstrapToken string `yaml:"management_bootstrap_token"`
+	Iface                    string `yaml:"iface"`
+	APIListenAddr            string `yaml:"api_listen_addr"`
+	GuardedPortsRange        string `yaml:"guarded_ports_range"`
+	HandshakeWindowSec       int    `yaml:"handshake_window_sec"`
+	ShutdownTimeoutSec       int    `yaml:"shutdown_timeout_sec"`
 
 	ConfigPath string
 }

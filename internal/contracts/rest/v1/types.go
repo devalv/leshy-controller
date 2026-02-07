@@ -33,7 +33,10 @@ type StatsResponse struct {
 
 // UpsertManagementSettingsRequest is a JSON contract for POST /management/settings.
 type UpsertManagementSettingsRequest struct {
-	Token             string `json:"token"`
+	Issuer            string `json:"issuer"`
+	Audience          string `json:"audience"`
+	JWKSURL           string `json:"jwks_url"`
+	RequiredScope     string `json:"required_scope"`
 	GuardedPortsRange string `json:"guarded_ports_range"`
 	Iface             string `json:"iface"`
 }
@@ -41,7 +44,11 @@ type UpsertManagementSettingsRequest struct {
 // UpsertManagementSettingsResponse is a JSON contract for POST /management/settings response.
 type UpsertManagementSettingsResponse struct {
 	Message           string `json:"message"`
-	TokenConfigured   bool   `json:"token_configured"`
+	AuthConfigured    bool   `json:"auth_configured"`
+	Issuer            string `json:"issuer"`
+	Audience          string `json:"audience"`
+	JWKSURL           string `json:"jwks_url"`
+	RequiredScope     string `json:"required_scope"`
 	GuardedPortsRange string `json:"guarded_ports_range"`
 	Iface             string `json:"iface"`
 	UpdatedAt         string `json:"updated_at"` // RFC3339 (UTC)
@@ -49,7 +56,11 @@ type UpsertManagementSettingsResponse struct {
 
 // GetManagementSettingsResponse is a JSON contract for GET /management/settings response.
 type GetManagementSettingsResponse struct {
-	TokenConfigured   bool   `json:"token_configured"`
+	AuthConfigured    bool   `json:"auth_configured"`
+	Issuer            string `json:"issuer"`
+	Audience          string `json:"audience"`
+	JWKSURL           string `json:"jwks_url"`
+	RequiredScope     string `json:"required_scope"`
 	GuardedPortsRange string `json:"guarded_ports_range"`
 	Iface             string `json:"iface"`
 	UpdatedAt         string `json:"updated_at"` // RFC3339 (UTC)

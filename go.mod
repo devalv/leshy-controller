@@ -4,6 +4,7 @@ go 1.25.3
 
 require (
 	github.com/cilium/ebpf v0.20.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/rs/zerolog v1.34.0
 	golang.org/x/sync v0.17.0

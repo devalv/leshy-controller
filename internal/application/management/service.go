@@ -2,9 +2,11 @@ package management
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -15,37 +17,56 @@ const (
 )
 
 var (
-	// ErrInvalidToken is returned when management token is invalid.
-	ErrInvalidToken = errors.New("invalid management token")
-	// ErrInvalidGuardedPortsRange is returned when ports range is invalid.
+	ErrInvalidIssuer            = errors.New("invalid issuer")
+	ErrInvalidAudience          = errors.New("invalid audience")
+	ErrInvalidJWKSURL           = errors.New("invalid jwks url")
+	ErrInvalidRequiredScope     = errors.New("invalid required scope")
 	ErrInvalidGuardedPortsRange = errors.New("invalid guarded ports range")
-	// ErrInvalidIface is returned when network interface is invalid.
-	ErrInvalidIface = errors.New("invalid network interface")
-	// ErrSettingsNotFound is returned when settings are not yet persisted.
-	ErrSettingsNotFound = errors.New("management settings not found")
+	ErrInvalidIface             = errors.New("invalid network interface")
+	ErrInvalidAccessToken       = errors.New("invalid access token")
+	ErrAuthorizationUnavailable = errors.New("authorization unavailable")
+	ErrInvalidBootstrapToken    = errors.New("invalid bootstrap token")
+	ErrBootstrapLocked          = errors.New("management settings are locked")
+	ErrBootstrapNotConfigured   = errors.New("management bootstrap is not configured")
+	ErrSettingsNotFound         = errors.New("management settings not found")
 )
 
-// Service orchestrates management settings validation and persistence.
+type Options struct {
+	BootstrapToken string
+}
+
+// Service orchestrates management settings validation, persistence and authorization.
 type Service struct {
-	repository Repository
+	repository     Repository
+	verifier       Verifier
+	bootstrapToken string
 }
 
 // New creates a new management Service.
-func New(repository Repository) *Service {
+func New(repository Repository, verifier Verifier, options Options) *Service {
 	return &Service{
-		repository: repository,
+		repository:     repository,
+		verifier:       verifier,
+		bootstrapToken: strings.TrimSpace(options.BootstrapToken),
 	}
 }
 
-// SaveSettings validates management settings and stores them in repository.
+// SaveSettings validates management settings, verifies JWKS provider and stores settings in repository.
 func (s *Service) SaveSettings(ctx context.Context, settings Settings) (StoredSettings, error) {
 	if s.repository == nil {
 		return StoredSettings{}, errors.New("repository is nil")
+	}
+	if s.verifier == nil {
+		return StoredSettings{}, errors.New("verifier is nil")
 	}
 
 	normalized, err := normalizeAndValidate(settings)
 	if err != nil {
 		return StoredSettings{}, err
+	}
+
+	if err := s.verifier.ValidateSettings(ctx, normalized); err != nil {
+		return StoredSettings{}, fmt.Errorf("%w: %s", ErrInvalidJWKSURL, err.Error())
 	}
 
 	stored, err := s.repository.SaveSettings(ctx, normalized)
@@ -74,10 +95,93 @@ func (s *Service) GetSettings(ctx context.Context) (StoredSettings, error) {
 	return stored, nil
 }
 
-func normalizeAndValidate(settings Settings) (Settings, error) {
-	token := strings.TrimSpace(settings.Token)
+// AuthorizeAllow validates incoming JWT access token for /allow operation.
+func (s *Service) AuthorizeAllow(ctx context.Context, accessToken string) error {
+	if s.repository == nil {
+		return errors.New("repository is nil")
+	}
+	if s.verifier == nil {
+		return errors.New("verifier is nil")
+	}
+
+	token := strings.TrimSpace(accessToken)
 	if token == "" {
-		return Settings{}, fmt.Errorf("%w: token cannot be empty", ErrInvalidToken)
+		return fmt.Errorf("%w: token cannot be empty", ErrInvalidAccessToken)
+	}
+
+	stored, err := s.repository.LoadSettings(ctx)
+	if err != nil {
+		if errors.Is(err, ErrSettingsNotFound) {
+			return ErrSettingsNotFound
+		}
+
+		return fmt.Errorf("load management settings: %w", err)
+	}
+
+	if err := s.verifier.VerifyAllowToken(ctx, stored.Settings, token); err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidAccessToken):
+			return ErrInvalidAccessToken
+		case errors.Is(err, ErrAuthorizationUnavailable):
+			return ErrAuthorizationUnavailable
+		default:
+			return fmt.Errorf("verify allow token: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// AuthorizeSettingsBootstrap validates one-time bootstrap token and ensures settings are not configured yet.
+func (s *Service) AuthorizeSettingsBootstrap(ctx context.Context, bootstrapToken string) error {
+	if s.repository == nil {
+		return errors.New("repository is nil")
+	}
+
+	if s.bootstrapToken == "" {
+		return ErrBootstrapNotConfigured
+	}
+
+	stored, err := s.repository.LoadSettings(ctx)
+	if err == nil {
+		_ = stored
+
+		return ErrBootstrapLocked
+	}
+	if !errors.Is(err, ErrSettingsNotFound) {
+		return fmt.Errorf("load management settings: %w", err)
+	}
+
+	candidate := strings.TrimSpace(bootstrapToken)
+	if candidate == "" {
+		return ErrInvalidBootstrapToken
+	}
+	if subtle.ConstantTimeCompare([]byte(candidate), []byte(s.bootstrapToken)) != 1 {
+		return ErrInvalidBootstrapToken
+	}
+
+	return nil
+}
+
+func normalizeAndValidate(settings Settings) (Settings, error) {
+	issuer := strings.TrimSpace(settings.Issuer)
+	if err := validateIssuer(issuer); err != nil {
+		return Settings{}, fmt.Errorf("%w: %s", ErrInvalidIssuer, err.Error())
+	}
+
+	audience := strings.TrimSpace(settings.Audience)
+	if err := validateAudience(audience); err != nil {
+		return Settings{}, fmt.Errorf("%w: %s", ErrInvalidAudience, err.Error())
+	}
+
+	jwksURL := strings.TrimSpace(settings.JWKSURL)
+	if err := validateJWKSURL(jwksURL); err != nil {
+		return Settings{}, fmt.Errorf("%w: %s", ErrInvalidJWKSURL, err.Error())
+	}
+
+	requiredScope := strings.TrimSpace(settings.RequiredScope)
+	if err := validateRequiredScope(requiredScope); err != nil {
+		return Settings{}, fmt.Errorf("%w: %s", ErrInvalidRequiredScope, err.Error())
 	}
 
 	guardedPortsRange := strings.TrimSpace(settings.GuardedPortsRange)
@@ -91,10 +195,76 @@ func normalizeAndValidate(settings Settings) (Settings, error) {
 	}
 
 	return Settings{
-		Token:             token,
+		Issuer:            issuer,
+		Audience:          audience,
+		JWKSURL:           jwksURL,
+		RequiredScope:     requiredScope,
 		GuardedPortsRange: guardedPortsRange,
 		Iface:             iface,
 	}, nil
+}
+
+func validateIssuer(issuer string) error {
+	if issuer == "" {
+		return errors.New("issuer cannot be empty")
+	}
+
+	parsed, err := url.Parse(issuer)
+	if err != nil {
+		return fmt.Errorf("parse issuer URL: %w", err)
+	}
+	if !parsed.IsAbs() {
+		return errors.New("issuer must be an absolute URL")
+	}
+	if parsed.Scheme != "https" {
+		return errors.New("issuer URL scheme must be https")
+	}
+	if parsed.Host == "" {
+		return errors.New("issuer host cannot be empty")
+	}
+
+	return nil
+}
+
+func validateAudience(audience string) error {
+	if audience == "" {
+		return errors.New("audience cannot be empty")
+	}
+
+	return nil
+}
+
+func validateJWKSURL(jwksURL string) error {
+	if jwksURL == "" {
+		return errors.New("jwks URL cannot be empty")
+	}
+
+	parsed, err := url.Parse(jwksURL)
+	if err != nil {
+		return fmt.Errorf("parse jwks URL: %w", err)
+	}
+	if !parsed.IsAbs() {
+		return errors.New("jwks URL must be an absolute URL")
+	}
+	if parsed.Scheme != "https" {
+		return errors.New("jwks URL scheme must be https")
+	}
+	if parsed.Host == "" {
+		return errors.New("jwks URL host cannot be empty")
+	}
+
+	return nil
+}
+
+func validateRequiredScope(scope string) error {
+	if scope == "" {
+		return errors.New("required scope cannot be empty")
+	}
+	if strings.ContainsAny(scope, " \t\n\r\v\f") {
+		return errors.New("required scope cannot contain whitespace")
+	}
+
+	return nil
 }
 
 func validateIface(iface string) error {
@@ -127,8 +297,9 @@ func validateGuardedPortsRange(rangeStr string) error {
 		return errors.New("guarded ports range cannot contain whitespace")
 	}
 
+	const rangeParts = 2
 	parts := strings.Split(rangeStr, "-")
-	if len(parts) != 2 { //nolint:mnd
+	if len(parts) != rangeParts {
 		return errors.New("guarded ports range format must be 'start-end'")
 	}
 
