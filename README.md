@@ -175,6 +175,20 @@ management_bootstrap_token: "REPLACE_WITH_RANDOM_TOKEN"
 4. Реализовать выдачу короткоживущих JWT (рекомендуемо 5-15 минут) с header `kid` и claims:
 `iss`, `aud`, `exp`, `nbf`, `iat`, `scope` (должен содержать `required_scope`), желательно `jti`.
 
+### 2.1 Доверие к TLS-сертификату JWKS (важно для стенда)
+
+`leshy-controller` забирает JWKS через стандартный `net/http` клиент Go и проверяет TLS-цепочку по системному trust store хоста, где запущен контроллер.
+
+Это значит:
+1. `jwks_url` должен быть `https://...` с валидным сертификатом и корректным именем хоста (SAN/CN).
+2. Самоподписанный сертификат без доверенной CA приведет к ошибке загрузки JWKS (`authorization unavailable` / `failed to save management settings`).
+3. Для тестового стенда используйте один из вариантов:
+   - выпустить сертификат от внутренней/публичной CA, которой доверяет ОС;
+   - добавить вашу тестовую CA в системный trust store узла с `leshy-controller`;
+   - для локального dev использовать `mkcert` и установить локальную CA в trust store.
+
+Примечание: insecure-режим с отключением TLS-проверки в `leshy-controller` не предусмотрен.
+
 ### 3. Первичная конфигурация приложения (`/management/settings`)
 
 Выполнить единоразовую настройку:
@@ -209,3 +223,14 @@ curl -X POST "http://<host>:9090/api/v1/allow" \
 2. После перезапуска приложение читает сохранённые настройки из SQLite и продолжает проверять JWT по ним.
 3. Для ротации ключей публикуйте новый ключ в JWKS с новым `kid`, затем выпускайте новые JWT с этим `kid`.
 4. Если `management_bootstrap_token` не задан в конфиге, `POST /management/settings` вернёт `503`.
+
+### 6. Пошаговый пример для stub-auth как подключить внешний auth-сервис
+
+[GitHub Gist](https://gist.github.com/devalv/33998fbcf2d1ae3ba53c835340ba3614)
+
+### 7. Сброс настроек
+
+1. Остановите leshy-controller
+2. Удалите локальную БД (файл)
+3. Запустите leshy-controller
+4. Выполните повторную настройку (`/management/settings`)
