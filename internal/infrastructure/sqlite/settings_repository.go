@@ -38,9 +38,10 @@ INSERT INTO management_settings (
 	required_scope,
 	guarded_ports_range,
 	iface,
+	handshake_window_sec,
 	updated_at_unix
 )
-VALUES (1, ?, ?, ?, ?, ?, ?, CAST(strftime('%s', 'now') AS INTEGER))
+VALUES (1, ?, ?, ?, ?, ?, ?, ?, CAST(strftime('%s', 'now') AS INTEGER))
 ON CONFLICT(id) DO UPDATE SET
 	issuer = excluded.issuer,
 	audience = excluded.audience,
@@ -48,6 +49,7 @@ ON CONFLICT(id) DO UPDATE SET
 	required_scope = excluded.required_scope,
 	guarded_ports_range = excluded.guarded_ports_range,
 	iface = excluded.iface,
+	handshake_window_sec = excluded.handshake_window_sec,
 	updated_at_unix = CAST(strftime('%s', 'now') AS INTEGER);
 `
 
@@ -60,6 +62,7 @@ ON CONFLICT(id) DO UPDATE SET
 		settings.RequiredScope,
 		settings.GuardedPortsRange,
 		settings.Iface,
+		settings.HandshakeWindowSec,
 	); err != nil {
 		return management.StoredSettings{}, fmt.Errorf("upsert management settings: %w", err)
 	}
@@ -75,19 +78,20 @@ ON CONFLICT(id) DO UPDATE SET
 // LoadSettings reads stored management settings.
 func (r *ManagementSettingsRepository) LoadSettings(ctx context.Context) (management.StoredSettings, error) {
 	const loadSQL = `
-SELECT issuer, audience, jwks_url, required_scope, guarded_ports_range, iface, updated_at_unix
+SELECT issuer, audience, jwks_url, required_scope, guarded_ports_range, iface, handshake_window_sec, updated_at_unix
 FROM management_settings
 WHERE id = 1;
 `
 
 	var (
-		issuer            string
-		audience          string
-		jwksURL           string
-		requiredScope     string
-		guardedPortsRange string
-		iface             string
-		updatedAtUnix     int64
+		issuer             string
+		audience           string
+		jwksURL            string
+		requiredScope      string
+		guardedPortsRange  string
+		iface              string
+		handshakeWindowSec int
+		updatedAtUnix      int64
 	)
 
 	if err := r.db.QueryRowContext(ctx, loadSQL).Scan(
@@ -97,6 +101,7 @@ WHERE id = 1;
 		&requiredScope,
 		&guardedPortsRange,
 		&iface,
+		&handshakeWindowSec,
 		&updatedAtUnix,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -108,12 +113,13 @@ WHERE id = 1;
 
 	return management.StoredSettings{
 		Settings: management.Settings{
-			Issuer:            issuer,
-			Audience:          audience,
-			JWKSURL:           jwksURL,
-			RequiredScope:     requiredScope,
-			GuardedPortsRange: guardedPortsRange,
-			Iface:             iface,
+			Issuer:             issuer,
+			Audience:           audience,
+			JWKSURL:            jwksURL,
+			RequiredScope:      requiredScope,
+			GuardedPortsRange:  guardedPortsRange,
+			Iface:              iface,
+			HandshakeWindowSec: handshakeWindowSec,
 		},
 		UpdatedAt: time.Unix(updatedAtUnix, 0).UTC(),
 	}, nil

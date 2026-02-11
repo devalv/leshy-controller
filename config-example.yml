@@ -1,10 +1,7 @@
 debug: true
-iface: ens18
 bpf_program_path: ./bpf/l4_filter.o
 bpf_pin_path: /sys/fs/bpf
 db_path: ./leshy-controller.db
 management_bootstrap_token: "change-me-please"
 api_listen_addr: 0.0.0.0:9090
-guarded_ports_range: 3389-3391
-handshake_window_sec: 600
 shutdown_timeout_sec: 10

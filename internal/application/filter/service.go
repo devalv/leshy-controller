@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 )
 
 var (
 	ErrInvalidPort    = errors.New("invalid port")
 	ErrPortNotGuarded = errors.New("port is not guarded")
+	ErrNotConfigured  = errors.New("filter is not configured")
 )
 
 type UseCase interface {
@@ -25,6 +27,7 @@ type Options struct {
 }
 
 type Service struct {
+	mu      sync.RWMutex
 	backend Backend
 	window  time.Duration
 	debug   bool
@@ -45,12 +48,41 @@ func New(backend Backend, opts Options) *Service {
 	}
 }
 
+// ConfigureRuntime replaces backend and window used by Allow/Stats at runtime.
+func (s *Service) ConfigureRuntime(backend Backend, window time.Duration) error {
+	if backend == nil {
+		return errors.New("backend is nil")
+	}
+	if window <= 0 {
+		return errors.New("window must be greater than zero")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.backend = backend
+	s.window = window
+
+	return nil
+}
+
 func (s *Service) Allow(ctx context.Context, ip net.IP, port uint16) (time.Time, error) {
 	if port == 0 {
 		return time.Time{}, ErrInvalidPort
 	}
 
-	guarded, err := s.backend.IsPortGuarded(ctx, port)
+	s.mu.RLock()
+	backend := s.backend
+	window := s.window
+	debug := s.debug
+	now := s.now
+	s.mu.RUnlock()
+
+	if backend == nil || window <= 0 {
+		return time.Time{}, ErrNotConfigured
+	}
+
+	guarded, err := backend.IsPortGuarded(ctx, port)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("IsPortGuarded err: %w", err)
 	}
@@ -58,20 +90,28 @@ func (s *Service) Allow(ctx context.Context, ip net.IP, port uint16) (time.Time,
 		return time.Time{}, ErrPortNotGuarded
 	}
 
-	if err := s.backend.InsertPending(ctx, ip, port, s.window); err != nil {
+	if err := backend.InsertPending(ctx, ip, port, window); err != nil {
 		return time.Time{}, fmt.Errorf("InsertPending err: %w", err)
 	}
 
-	if s.debug {
+	if debug {
 		// дополнительная валидация через bpftool
-		_ = s.backend.VerifyPending(ctx, ip, port)
+		_ = backend.VerifyPending(ctx, ip, port)
 	}
 
-	return s.now().Add(s.window), nil
+	return now().Add(window), nil
 }
 
 func (s *Service) Stats(ctx context.Context) (Stats, error) {
-	c, err := s.backend.Stats(ctx)
+	s.mu.RLock()
+	backend := s.backend
+	s.mu.RUnlock()
+
+	if backend == nil {
+		return Stats{}, ErrNotConfigured
+	}
+
+	c, err := backend.Stats(ctx)
 	if err != nil {
 		return Stats{}, fmt.Errorf("backend stats err: %w", err)
 	}

@@ -28,7 +28,7 @@
 │   └── README.md
 │
 ├── cmd/
-│   └── leshy-controller/
+│   └── controller/
 │       └── `main.go`
 │           # Точка входа
 │           # - читает конфиг
@@ -42,20 +42,20 @@
 │   │   │   ├── `service.go`   # UseCase для /allow
 │   │   │   └── `stats.go`     # Модель расширенной статистики
 │   │   └── management/
-│   │       ├── `types.go`     # Настройки trust-контура (issuer/audience/jwks/scope)
-│   │       ├── `port.go`      # Контракты usecase/repository/verifier
-│   │       └── `service.go`   # Валидация settings + bootstrap + авторизация JWT
+│   │       ├── `types.go`     # Настройки trust-контура + runtime status
+│   │       ├── `port.go`      # Контракты usecase/repository/verifier/runtime applier
+│   │       └── `service.go`   # Bootstrap + валидация settings + авторизация JWT
 │   │
 │   ├── bootstrap/
-│   │   └── `bootstrap.go`     # Composition root (wire всех зависимостей)
+│   │   └── `bootstrap.go`     # Composition root + применение сохраненных settings при старте
 │   │
 │   ├── config/
-│   │   ├── `config.go`        # Чтение yaml и runtime-валидация
+│   │   ├── `config.go`        # Чтение yaml и runtime-валидация общих параметров
 │   │   └── `config_test.go`
 │   │
 │   ├── contracts/
 │   │   └── rest/v1/
-│   │       └── `types.go`     # DTO REST API v1
+│   │       └── `types.go`     # DTO REST API v1 (включая runtime_attached/runtime_iface)
 │   │
 │   ├── infrastructure/
 │   │   ├── jwtauth/
@@ -64,6 +64,7 @@
 │   │   │   ├── `attach_manager.go`     # Attach lifecycle
 │   │   │   ├── `attach_tc.go`          # Загрузка/attach tc+bpf
 │   │   │   ├── `filter_backend.go`     # Backend adapter для application/filter
+│   │   │   ├── `runtime_settings_applier.go` # Динамическое применение iface/ports/window
 │   │   │   ├── `diagnostics_linux.go`  # Linux debug diagnostics
 │   │   │   └── `*.go`                  # guarded ports, pending, stats, utils
 │   │   └── sqlite/
@@ -77,16 +78,15 @@
 │   │
 │   ├── interfaces/
 │   │   ├── rest/
-│   │       ├── httpserver/
-│   │       │   ├── `server.go`   # HTTP transport (runtime.Server)
-│   │       │   └── `handlers.go`
-│   │       ├── router/
-│   │       │   └── `router.go`   # Root router (/api/v1, /api/healthz)
-│   │       └── v1/
-│   │           └── `api.go`      # HTTP handlers v1, mapping -> usecases
+│   │   │   ├── httpserver/
+│   │   │   │   ├── `server.go`   # HTTP transport (runtime.Server)
+│   │   │   │   └── `handlers.go`
+│   │   │   ├── router/
+│   │   │   │   └── `router.go`   # Root router (/api/v1, /api/healthz)
+│   │   │   └── v1/
+│   │   │       └── `api.go`      # HTTP handlers v1, mapping -> usecases
+│   │   │
 │   │   └── grpc/                 # roadmap: mirror/replace REST routes via gRPC
-│   │       ├── server/           # gRPC transport adapter (runtime.Server)
-│   │       └── v1/               # gRPC handlers v1 (те же usecases)
 │   │
 │   └── runtime/
 │       ├── `app.go`          # Оркестратор жизненного цикла приложения
@@ -119,17 +119,18 @@
 > **infrastructure/leshybpf** — это *конкретный secondary adapter* (инфраструктурный драйвер) для Linux/eBPF/TC.
 > Usecase-слой (`internal/application/filter`) **не знает** про `*ebpf.Map`, `tc`, `bpftool` и syscalls: он общается с инфраструктурой только через порт `filter.Backend`.
 > Внутри `leshybpf` собрана вся “железная” логика: attach/pin, работа с картами, byte order, и опциональная диагностика (только в debug).
+> gRPC-слой сохранен как roadmap: в дальнейшем текущие REST-сценарии будут продублированы/перенесены в gRPC transport.
 
-### Вызовы консольных утилит
+## Вызовы консольных утилит
 
-#### bpftool
+### bpftool
 Используется в режиме отладки. Если отсутствует в системе - будет залогировано предупреждение. Необходима для расширенного анализа вывода bpf-программ.
 
 
-#### tc
+### tc
 Используется для расширенной аналитики планировщика пакетов ядра.
 
-#### x86/x64
+## x86/x64
 Все тестирование и адаптация исключительно выполнялось для x64. На x86 с большой долей вероятности будут ошибки конвертации.
 
 ## Отладка
@@ -139,8 +140,9 @@
 
 Текущая схема:
 1. `POST /api/v1/management/settings` доступен только в bootstrap-режиме (заголовок `X-Bootstrap-Token`).
-2. После сохранения настроек приложение авторизует `POST /api/v1/allow` только по JWT (`Authorization: Bearer ...`).
-3. JWT проверяется по `JWKS` внешней системы (`EdDSA / Ed25519`).
+2. В `settings` передаются все runtime-параметры фильтра: `iface`, `guarded_ports_range`, `handshake_window_sec`.
+3. После успешного сохранения settings приложение динамически поднимает/обновляет eBPF runtime и начинает обслуживать `POST /api/v1/allow`.
+4. `JWT` для `/allow` проверяется по `JWKS` внешней системы (`EdDSA / Ed25519`).
 
 ### 1. Подготовка bootstrap-токена
 
@@ -189,7 +191,7 @@ management_bootstrap_token: "REPLACE_WITH_RANDOM_TOKEN"
 
 Примечание: insecure-режим с отключением TLS-проверки в `leshy-controller` не предусмотрен.
 
-### 3. Первичная конфигурация приложения (`/management/settings`)
+### 3. Первичная конфигурация приложения (`/api/v1/management/settings`)
 
 Выполнить единоразовую настройку:
 ```bash
@@ -202,9 +204,29 @@ curl -X POST "http://<host>:9090/api/v1/management/settings" \
     "jwks_url": "https://auth.example.com/.well-known/jwks.json",
     "required_scope": "allow:write",
     "guarded_ports_range": "3389-3390",
-    "iface": "ens18"
+    "iface": "ens18",
+    "handshake_window_sec": 600
   }'
 ```
+Пример успешного ответа:
+```json
+{
+  "message": "Management settings saved",
+  "auth_configured": true,
+  "runtime_attached": true,
+  "runtime_iface": "ens18",
+  "issuer": "https://auth.example.com",
+  "audience": "leshy-controller",
+  "jwks_url": "https://auth.example.com/.well-known/jwks.json",
+  "required_scope": "allow:write",
+  "guarded_ports_range": "3389-3390",
+  "iface": "ens18",
+  "handshake_window_sec": 600,
+  "updated_at": "2026-02-11T12:00:00Z"
+}
+```
+
+Успешный http-запрос в ответе получит статус 200.
 
 ### 4. Вызов `/allow` из внешней системы
 
@@ -219,10 +241,18 @@ curl -X POST "http://<host>:9090/api/v1/allow" \
 
 ### 5. Поведение после настройки
 
-1. После первого успешного `POST /management/settings` endpoint блокируется (`409 management settings are locked`), включая сценарий после перезапуска приложения.
-2. После перезапуска приложение читает сохранённые настройки из SQLite и продолжает проверять JWT по ним.
+1. После первого успешного `POST /api/v1/management/settings` endpoint блокируется (`409 management settings are locked`), включая сценарий после перезапуска приложения.
+2. После перезапуска приложение читает сохранённые settings из SQLite и повторно применяет их в runtime (attach выполняется автоматически при наличии сохраненных настроек).
 3. Для ротации ключей публикуйте новый ключ в JWKS с новым `kid`, затем выпускайте новые JWT с этим `kid`.
-4. Если `management_bootstrap_token` не задан в конфиге, `POST /management/settings` вернёт `503`.
+4. Если `management_bootstrap_token` не задан в конфиге, `POST /api/v1/management/settings` вернёт `503`.
+5. Если settings еще не заданы, runtime не подключен:
+   - `POST /api/v1/allow` вернет `503 filter is not configured`
+   - `GET /api/v1/stats` вернет `503 filter is not configured`
+   - `GET /api/healthz` вернет JSON с `runtime_attached: false`
+6. Runtime-статус дублируется в:
+   - `GET /api/healthz` (`runtime_attached`, `runtime_iface`)
+   - `GET /api/v1/management/settings`
+   - `POST /api/v1/management/settings`
 
 ### 6. Пошаговый пример для stub-auth как подключить внешний auth-сервис
 
@@ -233,4 +263,4 @@ curl -X POST "http://<host>:9090/api/v1/allow" \
 1. Остановите leshy-controller
 2. Удалите локальную БД (файл)
 3. Запустите leshy-controller
-4. Выполните повторную настройку (`/management/settings`)
+4. Выполните повторную настройку (`/api/v1/management/settings`)

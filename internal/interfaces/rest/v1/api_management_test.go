@@ -18,6 +18,7 @@ type managementUseCaseStub struct {
 	authorizeCalls          int
 	bootstrapAuthorizeCalls int
 	saved                   management.Settings
+	runtimeStatus           management.RuntimeStatus
 	saveFn                  func(ctx context.Context, settings management.Settings) (management.StoredSettings, error)
 	getFn                   func(ctx context.Context) (management.StoredSettings, error)
 	authorizeFn             func(ctx context.Context, accessToken string) error
@@ -37,6 +38,10 @@ func (s *managementUseCaseStub) SaveSettings(
 	return management.StoredSettings{
 		Settings:  settings,
 		UpdatedAt: time.Date(2026, time.January, 10, 12, 0, 0, 0, time.UTC),
+		Runtime: management.RuntimeStatus{
+			Attached: true,
+			Iface:    settings.Iface,
+		},
 	}, nil
 }
 
@@ -48,14 +53,19 @@ func (s *managementUseCaseStub) GetSettings(ctx context.Context) (management.Sto
 
 	return management.StoredSettings{
 		Settings: management.Settings{
-			Issuer:            "https://auth.example.com",
-			Audience:          "leshy-controller",
-			JWKSURL:           "https://auth.example.com/jwks.json",
-			RequiredScope:     "allow:write",
-			GuardedPortsRange: "3389-3391",
-			Iface:             "eth0",
+			Issuer:             "https://auth.example.com",
+			Audience:           "leshy-controller",
+			JWKSURL:            "https://auth.example.com/jwks.json",
+			RequiredScope:      "allow:write",
+			GuardedPortsRange:  "3389-3391",
+			Iface:              "eth0",
+			HandshakeWindowSec: 600,
 		},
 		UpdatedAt: time.Date(2026, time.January, 10, 12, 0, 0, 0, time.UTC),
+		Runtime: management.RuntimeStatus{
+			Attached: true,
+			Iface:    "eth0",
+		},
 	}, nil
 }
 
@@ -75,6 +85,10 @@ func (s *managementUseCaseStub) AuthorizeSettingsBootstrap(ctx context.Context, 
 	}
 
 	return nil
+}
+
+func (s *managementUseCaseStub) RuntimeStatus(context.Context) management.RuntimeStatus {
+	return s.runtimeStatus
 }
 
 func TestManagementSettingsPostEndpoint(t *testing.T) {
@@ -106,7 +120,7 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 		{
 			name:               "missing bootstrap header",
 			method:             http.MethodPost,
-			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0","handshake_window_sec":600}`,
 			bootstrapErr:       management.ErrInvalidBootstrapToken,
 			wantStatus:         http.StatusUnauthorized,
 			wantBodyContains:   "Unauthorized",
@@ -116,7 +130,7 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 		{
 			name:               "invalid bootstrap token",
 			method:             http.MethodPost,
-			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0","handshake_window_sec":600}`,
 			bootstrapHeader:    "bad-token",
 			bootstrapErr:       management.ErrInvalidBootstrapToken,
 			wantStatus:         http.StatusUnauthorized,
@@ -127,7 +141,7 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 		{
 			name:               "bootstrap is locked after pairing",
 			method:             http.MethodPost,
-			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0","handshake_window_sec":600}`,
 			bootstrapHeader:    "bootstrap",
 			bootstrapErr:       management.ErrBootstrapLocked,
 			wantStatus:         http.StatusConflict,
@@ -138,7 +152,7 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 		{
 			name:               "bootstrap is not configured",
 			method:             http.MethodPost,
-			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0","handshake_window_sec":600}`,
 			bootstrapHeader:    "bootstrap",
 			bootstrapErr:       management.ErrBootstrapNotConfigured,
 			wantStatus:         http.StatusServiceUnavailable,
@@ -159,7 +173,7 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 		{
 			name:               "missing issuer",
 			method:             http.MethodPost,
-			body:               `{"audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			body:               `{"audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0","handshake_window_sec":600}`,
 			bootstrapHeader:    "bootstrap",
 			wantStatus:         http.StatusBadRequest,
 			wantBodyContains:   "issuer is required",
@@ -167,9 +181,19 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 			wantBootstrapCalls: 1,
 		},
 		{
-			name:               "domain validation error",
+			name:               "missing handshake window",
 			method:             http.MethodPost,
 			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			bootstrapHeader:    "bootstrap",
+			wantStatus:         http.StatusBadRequest,
+			wantBodyContains:   "handshake_window_sec is required",
+			wantSaveCalls:      0,
+			wantBootstrapCalls: 1,
+		},
+		{
+			name:               "domain validation error",
+			method:             http.MethodPost,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0","handshake_window_sec":600}`,
 			bootstrapHeader:    "bootstrap",
 			useCaseErr:         management.ErrInvalidGuardedPortsRange,
 			wantStatus:         http.StatusBadRequest,
@@ -180,7 +204,7 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 		{
 			name:               "internal usecase error",
 			method:             http.MethodPost,
-			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0","handshake_window_sec":600}`,
 			bootstrapHeader:    "bootstrap",
 			useCaseErr:         internalErr,
 			wantStatus:         http.StatusInternalServerError,
@@ -191,10 +215,10 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 		{
 			name:               "success",
 			method:             http.MethodPost,
-			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0"}`,
+			body:               `{"issuer":"https://auth.example.com","audience":"leshy-controller","jwks_url":"https://auth.example.com/jwks.json","required_scope":"allow:write","guarded_ports_range":"3389-3391","iface":"eth0","handshake_window_sec":600}`,
 			bootstrapHeader:    "bootstrap",
 			wantStatus:         http.StatusOK,
-			wantBodyContains:   `"message":"Management settings saved"`,
+			wantBodyContains:   `"runtime_attached":true`,
 			wantSaveCalls:      1,
 			wantBootstrapCalls: 1,
 		},
@@ -223,14 +247,19 @@ func TestManagementSettingsPostEndpoint(t *testing.T) {
 
 					return management.StoredSettings{
 						Settings: management.Settings{
-							Issuer:            "https://auth.example.com",
-							Audience:          "leshy-controller",
-							JWKSURL:           "https://auth.example.com/jwks.json",
-							RequiredScope:     "allow:write",
-							GuardedPortsRange: "3389-3391",
-							Iface:             "eth0",
+							Issuer:             "https://auth.example.com",
+							Audience:           "leshy-controller",
+							JWKSURL:            "https://auth.example.com/jwks.json",
+							RequiredScope:      "allow:write",
+							GuardedPortsRange:  "3389-3391",
+							Iface:              "eth0",
+							HandshakeWindowSec: 600,
 						},
 						UpdatedAt: time.Date(2026, time.January, 10, 12, 0, 0, 0, time.UTC),
+						Runtime: management.RuntimeStatus{
+							Attached: true,
+							Iface:    "eth0",
+						},
 					}, nil
 				},
 			}
@@ -291,7 +320,7 @@ func TestManagementSettingsGetEndpoint(t *testing.T) {
 		{
 			name:             "success",
 			wantStatus:       http.StatusOK,
-			wantBodyContains: `"auth_configured":true`,
+			wantBodyContains: `"runtime_attached":true`,
 		},
 	}
 
@@ -308,14 +337,19 @@ func TestManagementSettingsGetEndpoint(t *testing.T) {
 
 					return management.StoredSettings{
 						Settings: management.Settings{
-							Issuer:            "https://auth.example.com",
-							Audience:          "leshy-controller",
-							JWKSURL:           "https://auth.example.com/jwks.json",
-							RequiredScope:     "allow:write",
-							GuardedPortsRange: "3389-3391",
-							Iface:             "eth0",
+							Issuer:             "https://auth.example.com",
+							Audience:           "leshy-controller",
+							JWKSURL:            "https://auth.example.com/jwks.json",
+							RequiredScope:      "allow:write",
+							GuardedPortsRange:  "3389-3391",
+							Iface:              "eth0",
+							HandshakeWindowSec: 600,
 						},
 						UpdatedAt: time.Date(2026, time.January, 10, 12, 0, 0, 0, time.UTC),
+						Runtime: management.RuntimeStatus{
+							Attached: true,
+							Iface:    "eth0",
+						},
 					}, nil
 				},
 			}

@@ -9,6 +9,8 @@ type Options struct {
 	// HealthPath — эндпоинт для health check.
 	// Например: "/api/healthz"
 	HealthPath string
+	// HealthHandler allows overriding default static "ok" health endpoint.
+	HealthHandler http.Handler
 }
 
 // New создает root http.Handler для REST.
@@ -21,10 +23,14 @@ func New(opts Options, versions map[string]http.Handler) http.Handler {
 		healthPath = "/api/healthz"
 	}
 
-	root.HandleFunc(healthPath, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	if opts.HealthHandler != nil {
+		root.Handle(healthPath, opts.HealthHandler)
+	} else {
+		root.HandleFunc(healthPath, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		})
+	}
 
 	for prefix, h := range versions {
 		if h == nil {

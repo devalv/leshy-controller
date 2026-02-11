@@ -160,3 +160,36 @@ func TestAllowEndpointAuthorizationFailureIsInternalError(t *testing.T) {
 		t.Fatalf("body = %q, expected allow authorization failed", response.Body.String())
 	}
 }
+
+func TestAllowEndpointReturnsServiceUnavailableWhenFilterNotConfigured(t *testing.T) {
+	t.Parallel()
+
+	filterStub := &filterUseCaseStub{
+		allowFn: func(context.Context, net.IP, uint16) (time.Time, error) {
+			return time.Time{}, filter.ErrNotConfigured
+		},
+	}
+	managementStub := &managementUseCaseStub{
+		authorizeFn: func(context.Context, string) error {
+			return nil
+		},
+	}
+
+	mux := http.NewServeMux()
+	Register(mux, Deps{
+		Filter:     filterStub,
+		Management: managementStub,
+	})
+
+	request := httptest.NewRequest(http.MethodPost, "/allow", strings.NewReader(`{"ip":"127.0.0.1","port":3389}`))
+	request.Header.Set("Authorization", "Bearer token")
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+	}
+	if !strings.Contains(response.Body.String(), "filter is not configured") {
+		t.Fatalf("body = %q, expected filter is not configured", response.Body.String())
+	}
+}

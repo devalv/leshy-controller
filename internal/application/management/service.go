@@ -12,8 +12,10 @@ import (
 )
 
 const (
-	minUserPort = 1023
-	maxPort     = 65535
+	minUserPort           = 1023
+	maxPort               = 65535
+	minHandshakeWindowSec = 1
+	maxHandshakeWindowSec = 10800
 )
 
 var (
@@ -23,6 +25,7 @@ var (
 	ErrInvalidRequiredScope     = errors.New("invalid required scope")
 	ErrInvalidGuardedPortsRange = errors.New("invalid guarded ports range")
 	ErrInvalidIface             = errors.New("invalid network interface")
+	ErrInvalidHandshakeWindow   = errors.New("invalid handshake window")
 	ErrInvalidAccessToken       = errors.New("invalid access token")
 	ErrAuthorizationUnavailable = errors.New("authorization unavailable")
 	ErrInvalidBootstrapToken    = errors.New("invalid bootstrap token")
@@ -32,22 +35,35 @@ var (
 )
 
 type Options struct {
-	BootstrapToken string
+	BootstrapToken        string
+	RuntimeApplier        RuntimeApplier
+	RuntimeStatusProvider RuntimeStatusProvider
 }
 
 // Service orchestrates management settings validation, persistence and authorization.
 type Service struct {
-	repository     Repository
-	verifier       Verifier
-	bootstrapToken string
+	repository            Repository
+	verifier              Verifier
+	runtimeApplier        RuntimeApplier
+	runtimeStatusProvider RuntimeStatusProvider
+	bootstrapToken        string
 }
 
 // New creates a new management Service.
 func New(repository Repository, verifier Verifier, options Options) *Service {
+	statusProvider := options.RuntimeStatusProvider
+	if statusProvider == nil {
+		if provider, ok := options.RuntimeApplier.(RuntimeStatusProvider); ok {
+			statusProvider = provider
+		}
+	}
+
 	return &Service{
-		repository:     repository,
-		verifier:       verifier,
-		bootstrapToken: strings.TrimSpace(options.BootstrapToken),
+		repository:            repository,
+		verifier:              verifier,
+		runtimeApplier:        options.RuntimeApplier,
+		runtimeStatusProvider: statusProvider,
+		bootstrapToken:        strings.TrimSpace(options.BootstrapToken),
 	}
 }
 
@@ -74,6 +90,13 @@ func (s *Service) SaveSettings(ctx context.Context, settings Settings) (StoredSe
 		return StoredSettings{}, fmt.Errorf("save management settings: %w", err)
 	}
 
+	if s.runtimeApplier != nil {
+		if err := s.runtimeApplier.Apply(ctx, stored.Settings); err != nil {
+			return StoredSettings{}, fmt.Errorf("apply runtime management settings: %w", err)
+		}
+	}
+	stored.Runtime = s.RuntimeStatus(ctx)
+
 	return stored, nil
 }
 
@@ -91,8 +114,18 @@ func (s *Service) GetSettings(ctx context.Context) (StoredSettings, error) {
 
 		return StoredSettings{}, fmt.Errorf("get management settings: %w", err)
 	}
+	stored.Runtime = s.RuntimeStatus(ctx)
 
 	return stored, nil
+}
+
+// RuntimeStatus returns runtime state of dynamic BPF configuration.
+func (s *Service) RuntimeStatus(ctx context.Context) RuntimeStatus {
+	if s.runtimeStatusProvider == nil {
+		return RuntimeStatus{}
+	}
+
+	return s.runtimeStatusProvider.RuntimeStatus(ctx)
 }
 
 // AuthorizeAllow validates incoming JWT access token for /allow operation.
@@ -194,13 +227,18 @@ func normalizeAndValidate(settings Settings) (Settings, error) {
 		return Settings{}, fmt.Errorf("%w: %s", ErrInvalidIface, err.Error())
 	}
 
+	if err := validateHandshakeWindowSec(settings.HandshakeWindowSec); err != nil {
+		return Settings{}, fmt.Errorf("%w: %s", ErrInvalidHandshakeWindow, err.Error())
+	}
+
 	return Settings{
-		Issuer:            issuer,
-		Audience:          audience,
-		JWKSURL:           jwksURL,
-		RequiredScope:     requiredScope,
-		GuardedPortsRange: guardedPortsRange,
-		Iface:             iface,
+		Issuer:             issuer,
+		Audience:           audience,
+		JWKSURL:            jwksURL,
+		RequiredScope:      requiredScope,
+		GuardedPortsRange:  guardedPortsRange,
+		Iface:              iface,
+		HandshakeWindowSec: settings.HandshakeWindowSec,
 	}, nil
 }
 
@@ -331,6 +369,18 @@ func validateGuardedPortsRange(rangeStr string) error {
 
 	if start > end {
 		return fmt.Errorf("start port %d is greater than end port %d", start, end)
+	}
+
+	return nil
+}
+
+func validateHandshakeWindowSec(windowSec int) error {
+	if windowSec < minHandshakeWindowSec {
+		return fmt.Errorf("handshake window must be at least %d second", minHandshakeWindowSec)
+	}
+
+	if windowSec > maxHandshakeWindowSec {
+		return fmt.Errorf("handshake window cannot exceed %d seconds", maxHandshakeWindowSec)
 	}
 
 	return nil

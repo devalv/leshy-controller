@@ -64,116 +64,172 @@ func (s *verifierStub) VerifyAllowToken(ctx context.Context, settings Settings, 
 	return s.verifyFn(ctx, settings, token)
 }
 
+type runtimeApplierStub struct {
+	applyCalls int
+	applyFn    func(ctx context.Context, settings Settings) error
+	statusFn   func(ctx context.Context) RuntimeStatus
+}
+
+func (s *runtimeApplierStub) Apply(ctx context.Context, settings Settings) error {
+	s.applyCalls++
+	if s.applyFn == nil {
+		return nil
+	}
+
+	return s.applyFn(ctx, settings)
+}
+
+func (s *runtimeApplierStub) RuntimeStatus(ctx context.Context) RuntimeStatus {
+	if s.statusFn == nil {
+		return RuntimeStatus{}
+	}
+
+	return s.statusFn(ctx)
+}
+
 func TestServiceSaveSettings(t *testing.T) {
 	t.Parallel()
 
 	iface := getUpInterface(t)
 	repositoryErr := errors.New("save failed")
 	verifierErr := errors.New("jwks lookup failed")
+	runtimeApplyErr := errors.New("runtime apply failed")
 
 	tests := []struct {
 		name           string
 		input          Settings
 		repoSaveFn     func(ctx context.Context, settings Settings) (StoredSettings, error)
 		verifierFn     func(ctx context.Context, settings Settings) error
+		runtimeApplyFn func(ctx context.Context, settings Settings) error
+		runtimeStatus  RuntimeStatus
 		wantErr        error
 		wantSaveCalls  int
 		wantCheckCalls int
+		wantApplyCalls int
 		wantNormalized Settings
 	}{
 		{
 			name: "empty issuer",
 			input: Settings{
-				Issuer:            "",
-				Audience:          "leshy-controller",
-				JWKSURL:           "https://auth.example.com/jwks.json",
-				RequiredScope:     "allow:write",
-				GuardedPortsRange: "1024-2048",
-				Iface:             iface,
+				Issuer:             "",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
 			},
 			wantErr:        ErrInvalidIssuer,
 			wantSaveCalls:  0,
 			wantCheckCalls: 0,
+			wantApplyCalls: 0,
 		},
 		{
 			name: "invalid audience",
 			input: Settings{
-				Issuer:            "https://auth.example.com",
-				Audience:          "",
-				JWKSURL:           "https://auth.example.com/jwks.json",
-				RequiredScope:     "allow:write",
-				GuardedPortsRange: "1024-2048",
-				Iface:             iface,
+				Issuer:             "https://auth.example.com",
+				Audience:           "",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
 			},
 			wantErr:        ErrInvalidAudience,
 			wantSaveCalls:  0,
 			wantCheckCalls: 0,
+			wantApplyCalls: 0,
 		},
 		{
 			name: "invalid jwks URL",
 			input: Settings{
-				Issuer:            "https://auth.example.com",
-				Audience:          "leshy-controller",
-				JWKSURL:           "http://auth.example.com/jwks.json",
-				RequiredScope:     "allow:write",
-				GuardedPortsRange: "1024-2048",
-				Iface:             iface,
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "http://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
 			},
 			wantErr:        ErrInvalidJWKSURL,
 			wantSaveCalls:  0,
 			wantCheckCalls: 0,
+			wantApplyCalls: 0,
 		},
 		{
 			name: "invalid required scope",
 			input: Settings{
-				Issuer:            "https://auth.example.com",
-				Audience:          "leshy-controller",
-				JWKSURL:           "https://auth.example.com/jwks.json",
-				RequiredScope:     "allow: write",
-				GuardedPortsRange: "1024-2048",
-				Iface:             iface,
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow: write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
 			},
 			wantErr:        ErrInvalidRequiredScope,
 			wantSaveCalls:  0,
 			wantCheckCalls: 0,
+			wantApplyCalls: 0,
 		},
 		{
 			name: "invalid guarded ports range",
 			input: Settings{
-				Issuer:            "https://auth.example.com",
-				Audience:          "leshy-controller",
-				JWKSURL:           "https://auth.example.com/jwks.json",
-				RequiredScope:     "allow:write",
-				GuardedPortsRange: "1024 - 2048",
-				Iface:             iface,
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024 - 2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
 			},
 			wantErr:        ErrInvalidGuardedPortsRange,
 			wantSaveCalls:  0,
 			wantCheckCalls: 0,
+			wantApplyCalls: 0,
 		},
 		{
 			name: "invalid interface",
 			input: Settings{
-				Issuer:            "https://auth.example.com",
-				Audience:          "leshy-controller",
-				JWKSURL:           "https://auth.example.com/jwks.json",
-				RequiredScope:     "allow:write",
-				GuardedPortsRange: "1024-2048",
-				Iface:             "this-interface-does-not-exist",
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              "this-interface-does-not-exist",
+				HandshakeWindowSec: 600,
 			},
 			wantErr:        ErrInvalidIface,
 			wantSaveCalls:  0,
 			wantCheckCalls: 0,
+			wantApplyCalls: 0,
+		},
+		{
+			name: "invalid handshake window",
+			input: Settings{
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 0,
+			},
+			wantErr:        ErrInvalidHandshakeWindow,
+			wantSaveCalls:  0,
+			wantCheckCalls: 0,
+			wantApplyCalls: 0,
 		},
 		{
 			name: "verifier validation fails",
 			input: Settings{
-				Issuer:            "https://auth.example.com",
-				Audience:          "leshy-controller",
-				JWKSURL:           "https://auth.example.com/jwks.json",
-				RequiredScope:     "allow:write",
-				GuardedPortsRange: "1024-2048",
-				Iface:             iface,
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
 			},
 			verifierFn: func(context.Context, Settings) error {
 				return verifierErr
@@ -181,16 +237,37 @@ func TestServiceSaveSettings(t *testing.T) {
 			wantErr:        ErrInvalidJWKSURL,
 			wantSaveCalls:  0,
 			wantCheckCalls: 1,
+			wantApplyCalls: 0,
+		},
+		{
+			name: "runtime apply returns error",
+			input: Settings{
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
+			},
+			runtimeApplyFn: func(context.Context, Settings) error {
+				return runtimeApplyErr
+			},
+			wantErr:        runtimeApplyErr,
+			wantSaveCalls:  1,
+			wantCheckCalls: 1,
+			wantApplyCalls: 1,
 		},
 		{
 			name: "repository returns error",
 			input: Settings{
-				Issuer:            "https://auth.example.com",
-				Audience:          "leshy-controller",
-				JWKSURL:           "https://auth.example.com/jwks.json",
-				RequiredScope:     "allow:write",
-				GuardedPortsRange: "1024-2048",
-				Iface:             iface,
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
 			},
 			repoSaveFn: func(context.Context, Settings) (StoredSettings, error) {
 				return StoredSettings{}, repositoryErr
@@ -198,26 +275,34 @@ func TestServiceSaveSettings(t *testing.T) {
 			wantErr:        repositoryErr,
 			wantSaveCalls:  1,
 			wantCheckCalls: 1,
+			wantApplyCalls: 0,
 		},
 		{
 			name: "success with normalization",
 			input: Settings{
-				Issuer:            "  https://auth.example.com  ",
-				Audience:          "  leshy-controller ",
-				JWKSURL:           "  https://auth.example.com/jwks.json ",
-				RequiredScope:     " allow:write ",
-				GuardedPortsRange: "1024-2048",
-				Iface:             " " + iface + " ",
+				Issuer:             "  https://auth.example.com  ",
+				Audience:           "  leshy-controller ",
+				JWKSURL:            "  https://auth.example.com/jwks.json ",
+				RequiredScope:      " allow:write ",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              " " + iface + " ",
+				HandshakeWindowSec: 600,
 			},
 			wantSaveCalls:  1,
 			wantCheckCalls: 1,
+			wantApplyCalls: 1,
+			runtimeStatus: RuntimeStatus{
+				Attached: true,
+				Iface:    iface,
+			},
 			wantNormalized: Settings{
-				Issuer:            "https://auth.example.com",
-				Audience:          "leshy-controller",
-				JWKSURL:           "https://auth.example.com/jwks.json",
-				RequiredScope:     "allow:write",
-				GuardedPortsRange: "1024-2048",
-				Iface:             iface,
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
 			},
 		},
 	}
@@ -229,9 +314,15 @@ func TestServiceSaveSettings(t *testing.T) {
 
 			repo := &repositoryStub{saveFn: tt.repoSaveFn}
 			verifier := &verifierStub{validateFn: tt.verifierFn}
-			service := New(repo, verifier, Options{})
+			applier := &runtimeApplierStub{
+				applyFn: tt.runtimeApplyFn,
+				statusFn: func(context.Context) RuntimeStatus {
+					return tt.runtimeStatus
+				},
+			}
+			service := New(repo, verifier, Options{RuntimeApplier: applier})
 
-			_, err := service.SaveSettings(context.Background(), tt.input)
+			stored, err := service.SaveSettings(context.Background(), tt.input)
 			if tt.wantErr != nil {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -249,8 +340,14 @@ func TestServiceSaveSettings(t *testing.T) {
 			if verifier.validateCalls != tt.wantCheckCalls {
 				t.Fatalf("verifier validate calls = %d, want %d", verifier.validateCalls, tt.wantCheckCalls)
 			}
+			if applier.applyCalls != tt.wantApplyCalls {
+				t.Fatalf("runtime apply calls = %d, want %d", applier.applyCalls, tt.wantApplyCalls)
+			}
 			if tt.wantSaveCalls > 0 && tt.wantNormalized != (Settings{}) && repo.saved != tt.wantNormalized {
 				t.Fatalf("saved settings = %+v, want %+v", repo.saved, tt.wantNormalized)
+			}
+			if tt.wantErr == nil && stored.Runtime != tt.runtimeStatus {
+				t.Fatalf("stored runtime status = %+v, want %+v", stored.Runtime, tt.runtimeStatus)
 			}
 		})
 	}
@@ -565,6 +662,29 @@ func TestServiceAuthorizeSettingsBootstrap(t *testing.T) {
 				t.Fatalf("repository load calls = %d, want %d", tt.repo.loadCalls, tt.wantLoadCalls)
 			}
 		})
+	}
+}
+
+func TestServiceRuntimeStatus(t *testing.T) {
+	t.Parallel()
+
+	iface := getUpInterface(t)
+	expected := RuntimeStatus{
+		Attached: true,
+		Iface:    iface,
+	}
+
+	service := New(&repositoryStub{}, &verifierStub{}, Options{
+		RuntimeStatusProvider: &runtimeApplierStub{
+			statusFn: func(context.Context) RuntimeStatus {
+				return expected
+			},
+		},
+	})
+
+	got := service.RuntimeStatus(context.Background())
+	if got != expected {
+		t.Fatalf("runtime status = %+v, want %+v", got, expected)
 	}
 }
 

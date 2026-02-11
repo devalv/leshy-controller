@@ -33,35 +33,42 @@ type StatsResponse struct {
 
 // UpsertManagementSettingsRequest is a JSON contract for POST /management/settings.
 type UpsertManagementSettingsRequest struct {
-	Issuer            string `json:"issuer"`
-	Audience          string `json:"audience"`
-	JWKSURL           string `json:"jwks_url"`
-	RequiredScope     string `json:"required_scope"`
-	GuardedPortsRange string `json:"guarded_ports_range"`
-	Iface             string `json:"iface"`
+	Issuer             string `json:"issuer"`
+	Audience           string `json:"audience"`
+	JWKSURL            string `json:"jwks_url"`
+	RequiredScope      string `json:"required_scope"`
+	GuardedPortsRange  string `json:"guarded_ports_range"`
+	Iface              string `json:"iface"`
+	HandshakeWindowSec int    `json:"handshake_window_sec"`
 }
 
 // UpsertManagementSettingsResponse is a JSON contract for POST /management/settings response.
 type UpsertManagementSettingsResponse struct {
-	Message           string `json:"message"`
-	AuthConfigured    bool   `json:"auth_configured"`
-	Issuer            string `json:"issuer"`
-	Audience          string `json:"audience"`
-	JWKSURL           string `json:"jwks_url"`
-	RequiredScope     string `json:"required_scope"`
-	GuardedPortsRange string `json:"guarded_ports_range"`
-	Iface             string `json:"iface"`
-	UpdatedAt         string `json:"updated_at"` // RFC3339 (UTC)
+	Message            string `json:"message"`
+	AuthConfigured     bool   `json:"auth_configured"`
+	RuntimeAttached    bool   `json:"runtime_attached"`
+	RuntimeIface       string `json:"runtime_iface"`
+	Issuer             string `json:"issuer"`
+	Audience           string `json:"audience"`
+	JWKSURL            string `json:"jwks_url"`
+	RequiredScope      string `json:"required_scope"`
+	GuardedPortsRange  string `json:"guarded_ports_range"`
+	Iface              string `json:"iface"`
+	HandshakeWindowSec int    `json:"handshake_window_sec"`
+	UpdatedAt          string `json:"updated_at"` // RFC3339 (UTC)
 }
 
 // GetManagementSettingsResponse is a JSON contract for GET /management/settings response.
 type GetManagementSettingsResponse struct {
-	AuthConfigured    bool   `json:"auth_configured"`
-	Issuer            string `json:"issuer"`
-	Audience          string `json:"audience"`
-	JWKSURL           string `json:"jwks_url"`
-	RequiredScope     string `json:"required_scope"`
-	GuardedPortsRange string `json:"guarded_ports_range"`
-	Iface             string `json:"iface"`
-	UpdatedAt         string `json:"updated_at"` // RFC3339 (UTC)
+	AuthConfigured     bool   `json:"auth_configured"`
+	RuntimeAttached    bool   `json:"runtime_attached"`
+	RuntimeIface       string `json:"runtime_iface"`
+	Issuer             string `json:"issuer"`
+	Audience           string `json:"audience"`
+	JWKSURL            string `json:"jwks_url"`
+	RequiredScope      string `json:"required_scope"`
+	GuardedPortsRange  string `json:"guarded_ports_range"`
+	Iface              string `json:"iface"`
+	HandshakeWindowSec int    `json:"handshake_window_sec"`
+	UpdatedAt          string `json:"updated_at"` // RFC3339 (UTC)
 }

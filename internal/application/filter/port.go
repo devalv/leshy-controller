@@ -14,3 +14,8 @@ type Backend interface {
 	// работает только в режиме отладки
 	VerifyPending(ctx context.Context, ip net.IP, port uint16) error
 }
+
+// RuntimeConfigurator updates filter runtime dependencies without recreating use case.
+type RuntimeConfigurator interface {
+	ConfigureRuntime(backend Backend, window time.Duration) error
+}

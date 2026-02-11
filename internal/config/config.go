@@ -22,10 +22,7 @@ type Config struct {
 	BPFPinPath               string `yaml:"bpf_pin_path"`
 	SettingsDBPath           string `yaml:"db_path"`
 	ManagementBootstrapToken string `yaml:"management_bootstrap_token"`
-	Iface                    string `yaml:"iface"`
 	APIListenAddr            string `yaml:"api_listen_addr"`
-	GuardedPortsRange        string `yaml:"guarded_ports_range"`
-	HandshakeWindowSec       int    `yaml:"handshake_window_sec"`
 	ShutdownTimeoutSec       int    `yaml:"shutdown_timeout_sec"`
 
 	ConfigPath string
@@ -97,26 +94,6 @@ func validateBPFPinPath(path string) error {
 	return nil
 }
 
-// Проверяем значение интерфейса.
-func validateIface(iface string) error {
-	if iface == "" {
-		return errors.New("interface name cannot be empty")
-	}
-
-	// Проверка существования в системе
-	ifaceObj, err := net.InterfaceByName(iface)
-	if err != nil {
-		return fmt.Errorf("interface '%s' not found: %w", iface, err)
-	}
-
-	// Проверка что интерфейс up
-	if ifaceObj.Flags&net.FlagUp == 0 {
-		return fmt.Errorf("interface '%s' is down", iface)
-	}
-
-	return nil
-}
-
 // Проверяем значение адреса API.
 func validateAPIListenAddr(addr string) error {
 	if addr == "" {
@@ -143,96 +120,6 @@ func validateAPIListenAddr(addr string) error {
 	_, err = net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("invalid listen address '%s': %w", addr, err)
-	}
-
-	return nil
-}
-
-// Проверяем значение диапазона портов.
-func validateGuardedPortsRange(rangeStr string) error {
-	const (
-		minPort = 1023
-		maxPort = 65535
-	)
-	if rangeStr == "" {
-		return errors.New("GuardedPortsRange cannot be empty")
-	}
-
-	// Проверка на наличие пробелов в любой части строки
-	if strings.Contains(rangeStr, " ") {
-		return fmt.Errorf("GuardedPortsRange cannot contain spaces, got '%s'", rangeStr)
-	}
-
-	// Проверка на другие whitespace символы
-	if strings.ContainsAny(rangeStr, "\t\n\r\v\f") {
-		return errors.New("GuardedPortsRange cannot contain whitespace characters")
-	}
-
-	// Проверяем формат "начало-конец"
-	parts := strings.Split(rangeStr, "-")
-	if len(parts) != 2 { //nolint:mnd
-		return fmt.Errorf("invalid range format, expected 'start-end', got '%s'", rangeStr)
-	}
-
-	// Проверяем что части не пустые
-	if parts[0] == "" {
-		return fmt.Errorf("start port cannot be empty in range '%s'", rangeStr)
-	}
-
-	if parts[1] == "" {
-		return fmt.Errorf("end port cannot be empty in range '%s'", rangeStr)
-	}
-
-	// Парсим начальный порт без удаления пробелов (их уже проверили)
-	start, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return fmt.Errorf("invalid start port '%s': %w", parts[0], err)
-	}
-
-	// Парсим конечный порт без удаления пробелов
-	end, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return fmt.Errorf("invalid end port '%s': %w", parts[1], err)
-	}
-
-	// Проверяем минимальное значение
-	if start < minPort {
-		return fmt.Errorf("start port %d is less than minimum allowed 1023", start)
-	}
-
-	if end < minPort {
-		return fmt.Errorf("end port %d is less than minimum allowed 1023", end)
-	}
-
-	// Проверяем максимальное значение
-	if start > maxPort {
-		return fmt.Errorf("start port %d exceeds maximum 65535", start)
-	}
-
-	if end > maxPort {
-		return fmt.Errorf("end port %d exceeds maximum 65535", end)
-	}
-
-	// Проверяем что начальный порт не больше конечного
-	if start > end {
-		return fmt.Errorf("start port %d is greater than end port %d", start, end)
-	}
-
-	return nil
-}
-
-// Проверяем значение окна установки соединения клиента.
-func validateHandshakeWindowSecs(secs int) error {
-	const (
-		minHandshakeWindowSecs = 1
-		maxHandshakeWindowSecs = 10800
-	)
-	if secs < minHandshakeWindowSecs {
-		return fmt.Errorf("HandshakeWindowSec must be at least 1, got %d", secs)
-	}
-
-	if secs > maxHandshakeWindowSecs {
-		return fmt.Errorf("HandshakeWindowSec cannot exceed 10800 seconds (3 hours), got %d", secs)
 	}
 
 	return nil
@@ -340,20 +227,8 @@ func (cfg *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("BPFPinPath: %w", err))
 	}
 
-	if err := validateIface(cfg.Iface); err != nil {
-		errs = append(errs, fmt.Errorf("iface: %w", err))
-	}
-
 	if err := validateAPIListenAddr(cfg.APIListenAddr); err != nil {
 		errs = append(errs, fmt.Errorf("APIListenAddr: %w", err))
-	}
-
-	if err := validateGuardedPortsRange(cfg.GuardedPortsRange); err != nil {
-		errs = append(errs, fmt.Errorf("GuardedPortsRange: %w", err))
-	}
-
-	if err := validateHandshakeWindowSecs(cfg.HandshakeWindowSec); err != nil {
-		errs = append(errs, fmt.Errorf("HandshakeWindowSec: %w", err))
 	}
 
 	if err := validateShutdownTimeout(cfg.ShutdownTimeoutSec); err != nil {

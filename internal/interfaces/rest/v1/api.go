@@ -46,6 +46,12 @@ func makeStatsHandler(filterUseCase filter.UseCase) http.HandlerFunc {
 
 		st, err := filterUseCase.Stats(r.Context())
 		if err != nil {
+			if errors.Is(err, filter.ErrNotConfigured) {
+				http.Error(w, "filter is not configured", http.StatusServiceUnavailable)
+
+				return
+			}
+
 			http.Error(w, "failed to get stats", http.StatusInternalServerError)
 
 			return
@@ -132,6 +138,10 @@ func makeAllowHandler(filterUseCase filter.UseCase, managementUseCase management
 		expires, err := filterUseCase.Allow(r.Context(), ip, req.Port)
 		if err != nil {
 			switch {
+			case errors.Is(err, filter.ErrNotConfigured):
+				http.Error(w, "filter is not configured", http.StatusServiceUnavailable)
+
+				return
 			case errors.Is(err, filter.ErrInvalidPort):
 				http.Error(w, "Valid port number required", http.StatusBadRequest)
 
@@ -213,12 +223,13 @@ func handleManagementSettingsSave(
 	}
 
 	stored, err := managementUseCase.SaveSettings(r.Context(), management.Settings{
-		Issuer:            req.Issuer,
-		Audience:          req.Audience,
-		JWKSURL:           req.JWKSURL,
-		RequiredScope:     req.RequiredScope,
-		GuardedPortsRange: req.GuardedPortsRange,
-		Iface:             req.Iface,
+		Issuer:             req.Issuer,
+		Audience:           req.Audience,
+		JWKSURL:            req.JWKSURL,
+		RequiredScope:      req.RequiredScope,
+		GuardedPortsRange:  req.GuardedPortsRange,
+		Iface:              req.Iface,
+		HandshakeWindowSec: req.HandshakeWindowSec,
 	})
 	if err != nil {
 		switch {
@@ -227,7 +238,8 @@ func handleManagementSettingsSave(
 			errors.Is(err, management.ErrInvalidJWKSURL),
 			errors.Is(err, management.ErrInvalidRequiredScope),
 			errors.Is(err, management.ErrInvalidGuardedPortsRange),
-			errors.Is(err, management.ErrInvalidIface):
+			errors.Is(err, management.ErrInvalidIface),
+			errors.Is(err, management.ErrInvalidHandshakeWindow):
 			http.Error(w, err.Error(), http.StatusBadRequest)
 
 			return
@@ -239,15 +251,18 @@ func handleManagementSettingsSave(
 	}
 
 	resp := restv1.UpsertManagementSettingsResponse{
-		Message:           "Management settings saved",
-		AuthConfigured:    stored.Issuer != "" && stored.JWKSURL != "",
-		Issuer:            stored.Issuer,
-		Audience:          stored.Audience,
-		JWKSURL:           stored.JWKSURL,
-		RequiredScope:     stored.RequiredScope,
-		GuardedPortsRange: stored.GuardedPortsRange,
-		Iface:             stored.Iface,
-		UpdatedAt:         stored.UpdatedAt.UTC().Format(time.RFC3339),
+		Message:            "Management settings saved",
+		AuthConfigured:     stored.Issuer != "" && stored.JWKSURL != "",
+		RuntimeAttached:    stored.Runtime.Attached,
+		RuntimeIface:       stored.Runtime.Iface,
+		Issuer:             stored.Issuer,
+		Audience:           stored.Audience,
+		JWKSURL:            stored.JWKSURL,
+		RequiredScope:      stored.RequiredScope,
+		GuardedPortsRange:  stored.GuardedPortsRange,
+		Iface:              stored.Iface,
+		HandshakeWindowSec: stored.HandshakeWindowSec,
+		UpdatedAt:          stored.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 	if err := writeJSON(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to write JSON response")
@@ -279,14 +294,17 @@ func handleManagementSettingsGet(
 	}
 
 	resp := restv1.GetManagementSettingsResponse{
-		AuthConfigured:    stored.Issuer != "" && stored.JWKSURL != "",
-		Issuer:            stored.Issuer,
-		Audience:          stored.Audience,
-		JWKSURL:           stored.JWKSURL,
-		RequiredScope:     stored.RequiredScope,
-		GuardedPortsRange: stored.GuardedPortsRange,
-		Iface:             stored.Iface,
-		UpdatedAt:         stored.UpdatedAt.UTC().Format(time.RFC3339),
+		AuthConfigured:     stored.Issuer != "" && stored.JWKSURL != "",
+		RuntimeAttached:    stored.Runtime.Attached,
+		RuntimeIface:       stored.Runtime.Iface,
+		Issuer:             stored.Issuer,
+		Audience:           stored.Audience,
+		JWKSURL:            stored.JWKSURL,
+		RequiredScope:      stored.RequiredScope,
+		GuardedPortsRange:  stored.GuardedPortsRange,
+		Iface:              stored.Iface,
+		HandshakeWindowSec: stored.HandshakeWindowSec,
+		UpdatedAt:          stored.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 	if err := writeJSON(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to write JSON response")
@@ -399,6 +417,9 @@ func decodeManagementSettingsJSON(r *http.Request) (restv1.UpsertManagementSetti
 	}
 	if req.Iface == "" {
 		return req, errors.New("iface is required")
+	}
+	if req.HandshakeWindowSec == 0 {
+		return req, errors.New("handshake_window_sec is required")
 	}
 
 	// TODO: extra validation for incoming Settings

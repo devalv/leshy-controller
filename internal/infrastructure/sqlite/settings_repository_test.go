@@ -36,23 +36,25 @@ func TestManagementSettingsRepositorySaveSettings(t *testing.T) {
 		{
 			name: "insert initial settings",
 			settings: management.Settings{
-				Issuer:            "https://auth-v1.example.com",
-				Audience:          "leshy-controller",
-				JWKSURL:           "https://auth-v1.example.com/jwks.json",
-				RequiredScope:     "allow:write",
-				GuardedPortsRange: "3389-3391",
-				Iface:             "ens18",
+				Issuer:             "https://auth-v1.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth-v1.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "3389-3391",
+				Iface:              "ens18",
+				HandshakeWindowSec: 600,
 			},
 		},
 		{
 			name: "update existing settings",
 			settings: management.Settings{
-				Issuer:            "https://auth-v2.example.com",
-				Audience:          "leshy-controller",
-				JWKSURL:           "https://auth-v2.example.com/jwks.json",
-				RequiredScope:     "allow:write",
-				GuardedPortsRange: "3392-3399",
-				Iface:             "ens19",
+				Issuer:             "https://auth-v2.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth-v2.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "3392-3399",
+				Iface:              "ens19",
+				HandshakeWindowSec: 1200,
 			},
 		},
 	}
@@ -87,6 +89,13 @@ func TestManagementSettingsRepositorySaveSettings(t *testing.T) {
 			if stored.Iface != tt.settings.Iface {
 				t.Fatalf("stored iface = %q, want %q", stored.Iface, tt.settings.Iface)
 			}
+			if stored.HandshakeWindowSec != tt.settings.HandshakeWindowSec {
+				t.Fatalf(
+					"stored handshake window = %d, want %d",
+					stored.HandshakeWindowSec,
+					tt.settings.HandshakeWindowSec,
+				)
+			}
 			if stored.UpdatedAt.IsZero() {
 				t.Fatal("updated_at should not be zero")
 			}
@@ -97,6 +106,13 @@ func TestManagementSettingsRepositorySaveSettings(t *testing.T) {
 			}
 			if loaded.Issuer != tt.settings.Issuer {
 				t.Fatalf("loaded issuer = %q, want %q", loaded.Issuer, tt.settings.Issuer)
+			}
+			if loaded.HandshakeWindowSec != tt.settings.HandshakeWindowSec {
+				t.Fatalf(
+					"loaded handshake window = %d, want %d",
+					loaded.HandshakeWindowSec,
+					tt.settings.HandshakeWindowSec,
+				)
 			}
 		})
 	}
