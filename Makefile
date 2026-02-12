@@ -14,7 +14,7 @@ test:
 		-v $(PWD):/app \
 		-w /app \
 		golang:1.25-alpine \
-		sh -c "go mod download && go test -v ./..."
+		sh -c "apk add --no-cache build-base && go mod download && go env -w CGO_ENABLED=1 && go test -race -timeout=5m -v ./..."
 
 cover:
 	docker run --rm \

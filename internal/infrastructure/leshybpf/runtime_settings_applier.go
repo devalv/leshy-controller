@@ -73,7 +73,7 @@ func (a *RuntimeSettingsApplier) Apply(ctx context.Context, settings management.
 		return fmt.Errorf("initialize guarded ports: %w", err)
 	}
 
-	backend := NewFilterBackend(a.pendingMap, a.guardedMap, a.statsMap)
+	backend := NewFilterBackend(a.pendingMap, a.guardedMap, a.statsMap, a.activeMap)
 	if err := a.filterRuntime.ConfigureRuntime(
 		backend,
 		time.Duration(settings.HandshakeWindowSec)*time.Second,

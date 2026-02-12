@@ -5,6 +5,7 @@ import "context"
 // UseCase is an application contract for management settings.
 type UseCase interface {
 	SaveSettings(ctx context.Context, settings Settings) (StoredSettings, error)
+	UpdateSettings(ctx context.Context, settings Settings) (StoredSettings, error)
 	GetSettings(ctx context.Context) (StoredSettings, error)
 	RuntimeStatus(ctx context.Context) RuntimeStatus
 	AuthorizeAllow(ctx context.Context, accessToken string) error

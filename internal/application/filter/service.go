@@ -18,6 +18,7 @@ var (
 type UseCase interface {
 	Allow(ctx context.Context, ip net.IP, port uint16) (expires time.Time, err error)
 	Stats(ctx context.Context) (Stats, error)
+	BlockAll(ctx context.Context) (FlushResult, error)
 }
 
 type Options struct {
@@ -128,4 +129,22 @@ func (s *Service) Stats(ctx context.Context) (Stats, error) {
 		AllowRatePercent: allowRate,
 		DropRatePercent:  dropRate,
 	}, nil
+}
+
+// BlockAll clears all runtime allow-related entries previously created via Allow.
+func (s *Service) BlockAll(ctx context.Context) (FlushResult, error) {
+	s.mu.RLock()
+	backend := s.backend
+	s.mu.RUnlock()
+
+	if backend == nil {
+		return FlushResult{}, ErrNotConfigured
+	}
+
+	result, err := backend.FlushAuthorizations(ctx)
+	if err != nil {
+		return FlushResult{}, fmt.Errorf("FlushAuthorizations err: %w", err)
+	}
+
+	return result, nil
 }

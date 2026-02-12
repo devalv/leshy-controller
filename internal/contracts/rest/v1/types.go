@@ -72,3 +72,12 @@ type GetManagementSettingsResponse struct {
 	HandshakeWindowSec int    `json:"handshake_window_sec"`
 	UpdatedAt          string `json:"updated_at"` // RFC3339 (UTC)
 }
+
+// BlockManagementResponse is a JSON contract for POST /management/block response.
+type BlockManagementResponse struct {
+	Message               string `json:"message"`
+	PendingEntriesRemoved uint64 `json:"pending_entries_removed"`
+	ActiveFlowsRemoved    uint64 `json:"active_flows_removed"`
+	RuntimeAttached       bool   `json:"runtime_attached"`
+	RuntimeIface          string `json:"runtime_iface"`
+}

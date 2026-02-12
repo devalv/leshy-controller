@@ -353,6 +353,291 @@ func TestServiceSaveSettings(t *testing.T) {
 	}
 }
 
+func TestServiceUpdateSettings(t *testing.T) {
+	t.Parallel()
+
+	iface := getUpInterface(t)
+	repositoryErr := errors.New("load failed")
+	verifierErr := errors.New("jwks lookup failed")
+	saveErr := errors.New("save failed")
+	runtimeApplyErr := errors.New("runtime apply failed")
+
+	tests := []struct {
+		name           string
+		input          Settings
+		repo           repositoryStub
+		verifierFn     func(ctx context.Context, settings Settings) error
+		runtimeApplyFn func(ctx context.Context, settings Settings) error
+		runtimeStatus  RuntimeStatus
+		wantErr        error
+		wantLoadCalls  int
+		wantSaveCalls  int
+		wantCheckCalls int
+		wantApplyCalls int
+		wantNormalized Settings
+	}{
+		{
+			name: "settings not found",
+			input: Settings{
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
+			},
+			repo: repositoryStub{
+				loadErr: ErrSettingsNotFound,
+			},
+			wantErr:        ErrSettingsNotFound,
+			wantLoadCalls:  1,
+			wantSaveCalls:  0,
+			wantCheckCalls: 0,
+			wantApplyCalls: 0,
+		},
+		{
+			name: "load failure",
+			input: Settings{
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
+			},
+			repo: repositoryStub{
+				loadErr: repositoryErr,
+			},
+			wantErr:        repositoryErr,
+			wantLoadCalls:  1,
+			wantSaveCalls:  0,
+			wantCheckCalls: 0,
+			wantApplyCalls: 0,
+		},
+		{
+			name: "invalid audience",
+			input: Settings{
+				Issuer:             "https://auth.example.com",
+				Audience:           "",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
+			},
+			repo: repositoryStub{
+				loadSettings: StoredSettings{
+					Settings: Settings{
+						Issuer:             "https://auth.example.com",
+						Audience:           "leshy-controller",
+						JWKSURL:            "https://auth.example.com/jwks.json",
+						RequiredScope:      "allow:write",
+						GuardedPortsRange:  "1024-2048",
+						Iface:              iface,
+						HandshakeWindowSec: 600,
+					},
+				},
+			},
+			wantErr:        ErrInvalidAudience,
+			wantLoadCalls:  1,
+			wantSaveCalls:  0,
+			wantCheckCalls: 0,
+			wantApplyCalls: 0,
+		},
+		{
+			name: "verifier validation fails",
+			input: Settings{
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
+			},
+			repo: repositoryStub{
+				loadSettings: StoredSettings{
+					Settings: Settings{
+						Issuer:             "https://auth.example.com",
+						Audience:           "leshy-controller",
+						JWKSURL:            "https://auth.example.com/jwks.json",
+						RequiredScope:      "allow:write",
+						GuardedPortsRange:  "1024-2048",
+						Iface:              iface,
+						HandshakeWindowSec: 600,
+					},
+				},
+			},
+			verifierFn: func(context.Context, Settings) error {
+				return verifierErr
+			},
+			wantErr:        ErrInvalidJWKSURL,
+			wantLoadCalls:  1,
+			wantSaveCalls:  0,
+			wantCheckCalls: 1,
+			wantApplyCalls: 0,
+		},
+		{
+			name: "save failure",
+			input: Settings{
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
+			},
+			repo: repositoryStub{
+				loadSettings: StoredSettings{
+					Settings: Settings{
+						Issuer:             "https://auth.example.com",
+						Audience:           "leshy-controller",
+						JWKSURL:            "https://auth.example.com/jwks.json",
+						RequiredScope:      "allow:write",
+						GuardedPortsRange:  "1024-2048",
+						Iface:              iface,
+						HandshakeWindowSec: 600,
+					},
+				},
+				saveFn: func(context.Context, Settings) (StoredSettings, error) {
+					return StoredSettings{}, saveErr
+				},
+			},
+			wantErr:        saveErr,
+			wantLoadCalls:  1,
+			wantSaveCalls:  1,
+			wantCheckCalls: 1,
+			wantApplyCalls: 0,
+		},
+		{
+			name: "runtime apply failure",
+			input: Settings{
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
+			},
+			repo: repositoryStub{
+				loadSettings: StoredSettings{
+					Settings: Settings{
+						Issuer:             "https://auth.example.com",
+						Audience:           "leshy-controller",
+						JWKSURL:            "https://auth.example.com/jwks.json",
+						RequiredScope:      "allow:write",
+						GuardedPortsRange:  "1024-2048",
+						Iface:              iface,
+						HandshakeWindowSec: 600,
+					},
+				},
+			},
+			runtimeApplyFn: func(context.Context, Settings) error {
+				return runtimeApplyErr
+			},
+			wantErr:        runtimeApplyErr,
+			wantLoadCalls:  1,
+			wantSaveCalls:  1,
+			wantCheckCalls: 1,
+			wantApplyCalls: 1,
+		},
+		{
+			name: "success with normalization",
+			input: Settings{
+				Issuer:             "  https://auth.example.com  ",
+				Audience:           "  leshy-controller ",
+				JWKSURL:            "  https://auth.example.com/jwks.json ",
+				RequiredScope:      " allow:write ",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              " " + iface + " ",
+				HandshakeWindowSec: 600,
+			},
+			repo: repositoryStub{
+				loadSettings: StoredSettings{
+					Settings: Settings{
+						Issuer:             "https://auth.example.com",
+						Audience:           "leshy-controller",
+						JWKSURL:            "https://auth.example.com/jwks.json",
+						RequiredScope:      "allow:write",
+						GuardedPortsRange:  "1024-2048",
+						Iface:              iface,
+						HandshakeWindowSec: 600,
+					},
+				},
+			},
+			runtimeStatus: RuntimeStatus{
+				Attached: true,
+				Iface:    iface,
+			},
+			wantLoadCalls:  1,
+			wantSaveCalls:  1,
+			wantCheckCalls: 1,
+			wantApplyCalls: 1,
+			wantNormalized: Settings{
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := tt.repo
+			verifier := &verifierStub{validateFn: tt.verifierFn}
+			applier := &runtimeApplierStub{
+				applyFn: tt.runtimeApplyFn,
+				statusFn: func(context.Context) RuntimeStatus {
+					return tt.runtimeStatus
+				},
+			}
+			service := New(&repo, verifier, Options{RuntimeApplier: applier})
+
+			stored, err := service.UpdateSettings(context.Background(), tt.input)
+			if tt.wantErr != nil {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("expected error %v, got %v", tt.wantErr, err)
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if repo.loadCalls != tt.wantLoadCalls {
+				t.Fatalf("repository load calls = %d, want %d", repo.loadCalls, tt.wantLoadCalls)
+			}
+			if repo.saveCalls != tt.wantSaveCalls {
+				t.Fatalf("repository save calls = %d, want %d", repo.saveCalls, tt.wantSaveCalls)
+			}
+			if verifier.validateCalls != tt.wantCheckCalls {
+				t.Fatalf("verifier validate calls = %d, want %d", verifier.validateCalls, tt.wantCheckCalls)
+			}
+			if applier.applyCalls != tt.wantApplyCalls {
+				t.Fatalf("runtime apply calls = %d, want %d", applier.applyCalls, tt.wantApplyCalls)
+			}
+			if tt.wantSaveCalls > 0 && tt.wantNormalized != (Settings{}) && repo.saved != tt.wantNormalized {
+				t.Fatalf("saved settings = %+v, want %+v", repo.saved, tt.wantNormalized)
+			}
+			if tt.wantErr == nil && stored.Runtime != tt.runtimeStatus {
+				t.Fatalf("stored runtime status = %+v, want %+v", stored.Runtime, tt.runtimeStatus)
+			}
+		})
+	}
+}
+
 func TestServiceGetSettings(t *testing.T) {
 	t.Parallel()
 

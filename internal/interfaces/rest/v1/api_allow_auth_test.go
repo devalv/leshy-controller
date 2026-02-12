@@ -16,7 +16,9 @@ import (
 
 type filterUseCaseStub struct {
 	allowCalls int
+	blockCalls int
 	allowFn    func(ctx context.Context, ip net.IP, port uint16) (time.Time, error)
+	blockFn    func(ctx context.Context) (filter.FlushResult, error)
 }
 
 func (s *filterUseCaseStub) Allow(ctx context.Context, ip net.IP, port uint16) (time.Time, error) {
@@ -30,6 +32,15 @@ func (s *filterUseCaseStub) Allow(ctx context.Context, ip net.IP, port uint16) (
 
 func (s *filterUseCaseStub) Stats(context.Context) (filter.Stats, error) {
 	return filter.Stats{}, nil
+}
+
+func (s *filterUseCaseStub) BlockAll(ctx context.Context) (filter.FlushResult, error) {
+	s.blockCalls++
+	if s.blockFn == nil {
+		return filter.FlushResult{}, nil
+	}
+
+	return s.blockFn(ctx)
 }
 
 func TestAllowEndpointAuthorization(t *testing.T) {
@@ -191,5 +202,33 @@ func TestAllowEndpointReturnsServiceUnavailableWhenFilterNotConfigured(t *testin
 	}
 	if !strings.Contains(response.Body.String(), "filter is not configured") {
 		t.Fatalf("body = %q, expected filter is not configured", response.Body.String())
+	}
+}
+
+func TestAllowEndpointMethodNotAllowedSkipsAuthorization(t *testing.T) {
+	t.Parallel()
+
+	filterStub := &filterUseCaseStub{}
+	managementStub := &managementUseCaseStub{
+		authorizeFn: func(context.Context, string) error {
+			return nil
+		},
+	}
+
+	mux := http.NewServeMux()
+	Register(mux, Deps{
+		Filter:     filterStub,
+		Management: managementStub,
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/allow", nil)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
+	}
+	if managementStub.authorizeCalls != 0 {
+		t.Fatalf("authorize calls = %d, want 0", managementStub.authorizeCalls)
 	}
 }

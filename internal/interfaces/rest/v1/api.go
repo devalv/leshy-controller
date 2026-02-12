@@ -23,9 +23,29 @@ type Deps struct {
 const settingsBootstrapHeader = "X-Bootstrap-Token"
 
 func Register(mux *http.ServeMux, d Deps) {
+	allowHandler := withAllowAuthorization(d.Management, allowAuthorizationOptions{
+		Method:                         http.MethodPost,
+		Operation:                      "allow",
+		SettingsNotFoundStatus:         http.StatusServiceUnavailable,
+		SettingsNotFoundMessage:        "Authorization is unavailable",
+		AuthorizationUnavailableStatus: http.StatusServiceUnavailable,
+		AuthorizationUnavailableBody:   "Authorization is unavailable",
+		AuthorizationFailureBody:       "allow authorization failed",
+	}, makeAllowHandler(d.Filter))
+	managementBlockHandler := withAllowAuthorization(d.Management, allowAuthorizationOptions{
+		Method:                         http.MethodPost,
+		Operation:                      "management_block",
+		SettingsNotFoundStatus:         http.StatusConflict,
+		SettingsNotFoundMessage:        "management settings are not configured",
+		AuthorizationUnavailableStatus: http.StatusServiceUnavailable,
+		AuthorizationUnavailableBody:   "Authorization is unavailable",
+		AuthorizationFailureBody:       "management block authorization failed",
+	}, makeManagementBlockHandler(d.Filter, d.Management))
+
 	mux.HandleFunc("/stats", makeStatsHandler(d.Filter))
-	mux.HandleFunc("/allow", makeAllowHandler(d.Filter, d.Management))
+	mux.Handle("/allow", allowHandler)
 	mux.HandleFunc("/management/settings", makeManagementSettingsHandler(d.Management))
+	mux.Handle("/management/block", managementBlockHandler)
 }
 
 // --- handlers ---
@@ -78,7 +98,7 @@ func makeStatsHandler(filterUseCase filter.UseCase) http.HandlerFunc {
 	}
 }
 
-func makeAllowHandler(filterUseCase filter.UseCase, managementUseCase management.UseCase) http.HandlerFunc {
+func makeAllowHandler(filterUseCase filter.UseCase) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			methodNotAllowed(w, []string{http.MethodPost})
@@ -90,35 +110,6 @@ func makeAllowHandler(filterUseCase filter.UseCase, managementUseCase management
 			http.Error(w, "filter usecase is not configured", http.StatusInternalServerError)
 
 			return
-		}
-		if managementUseCase == nil {
-			http.Error(w, "management settings usecase is not configured", http.StatusInternalServerError)
-
-			return
-		}
-
-		accessToken, err := extractBearerAccessToken(r.Header.Get("Authorization"))
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-
-			return
-		}
-		if err := managementUseCase.AuthorizeAllow(r.Context(), accessToken); err != nil {
-			switch {
-			case errors.Is(err, management.ErrInvalidAccessToken):
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-
-				return
-			case errors.Is(err, management.ErrSettingsNotFound),
-				errors.Is(err, management.ErrAuthorizationUnavailable):
-				http.Error(w, "Authorization is unavailable", http.StatusServiceUnavailable)
-
-				return
-			default:
-				http.Error(w, "allow authorization failed", http.StatusInternalServerError)
-
-				return
-			}
 		}
 
 		req, err := decodeJSON(r)
@@ -170,14 +161,28 @@ func makeAllowHandler(filterUseCase filter.UseCase, managementUseCase management
 }
 
 func makeManagementSettingsHandler(managementUseCase management.UseCase) http.HandlerFunc {
+	patchHandler := withAllowAuthorization(managementUseCase, allowAuthorizationOptions{
+		Method:                         http.MethodPatch,
+		Operation:                      "management_settings_update",
+		SettingsNotFoundStatus:         http.StatusConflict,
+		SettingsNotFoundMessage:        "management settings are not configured",
+		AuthorizationUnavailableStatus: http.StatusServiceUnavailable,
+		AuthorizationUnavailableBody:   "Authorization is unavailable",
+		AuthorizationFailureBody:       "management settings authorization failed",
+	}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleManagementSettingsPatch(w, r, managementUseCase)
+	}))
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
 			handleManagementSettingsSave(w, r, managementUseCase)
+		case http.MethodPatch:
+			patchHandler.ServeHTTP(w, r)
 		case http.MethodGet:
 			handleManagementSettingsGet(w, r, managementUseCase)
 		default:
-			methodNotAllowed(w, []string{http.MethodGet, http.MethodPost})
+			methodNotAllowed(w, []string{http.MethodGet, http.MethodPost, http.MethodPatch})
 		}
 	}
 }
@@ -192,6 +197,7 @@ func handleManagementSettingsSave(
 
 		return
 	}
+	logMutationRequestSource(r, "management_settings_create")
 
 	bootstrapToken := r.Header.Get(settingsBootstrapHeader)
 	if err := managementUseCase.AuthorizeSettingsBootstrap(r.Context(), bootstrapToken); err != nil {
@@ -250,20 +256,63 @@ func handleManagementSettingsSave(
 		}
 	}
 
-	resp := restv1.UpsertManagementSettingsResponse{
-		Message:            "Management settings saved",
-		AuthConfigured:     stored.Issuer != "" && stored.JWKSURL != "",
-		RuntimeAttached:    stored.Runtime.Attached,
-		RuntimeIface:       stored.Runtime.Iface,
-		Issuer:             stored.Issuer,
-		Audience:           stored.Audience,
-		JWKSURL:            stored.JWKSURL,
-		RequiredScope:      stored.RequiredScope,
-		GuardedPortsRange:  stored.GuardedPortsRange,
-		Iface:              stored.Iface,
-		HandshakeWindowSec: stored.HandshakeWindowSec,
-		UpdatedAt:          stored.UpdatedAt.UTC().Format(time.RFC3339),
+	resp := managementSettingsResponse("Management settings saved", stored)
+	if err := writeJSON(w, resp); err != nil {
+		log.Error().Err(err).Msg("Failed to write JSON response")
 	}
+}
+
+func handleManagementSettingsPatch(
+	w http.ResponseWriter,
+	r *http.Request,
+	managementUseCase management.UseCase,
+) {
+	if managementUseCase == nil {
+		http.Error(w, "management settings usecase is not configured", http.StatusInternalServerError)
+
+		return
+	}
+
+	req, err := decodeManagementSettingsJSON(r)
+	if err != nil {
+		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+
+		return
+	}
+
+	stored, err := managementUseCase.UpdateSettings(r.Context(), management.Settings{
+		Issuer:             req.Issuer,
+		Audience:           req.Audience,
+		JWKSURL:            req.JWKSURL,
+		RequiredScope:      req.RequiredScope,
+		GuardedPortsRange:  req.GuardedPortsRange,
+		Iface:              req.Iface,
+		HandshakeWindowSec: req.HandshakeWindowSec,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, management.ErrInvalidIssuer),
+			errors.Is(err, management.ErrInvalidAudience),
+			errors.Is(err, management.ErrInvalidJWKSURL),
+			errors.Is(err, management.ErrInvalidRequiredScope),
+			errors.Is(err, management.ErrInvalidGuardedPortsRange),
+			errors.Is(err, management.ErrInvalidIface),
+			errors.Is(err, management.ErrInvalidHandshakeWindow):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+
+			return
+		case errors.Is(err, management.ErrSettingsNotFound):
+			http.Error(w, "management settings are not configured", http.StatusConflict)
+
+			return
+		default:
+			http.Error(w, "failed to update management settings", http.StatusInternalServerError)
+
+			return
+		}
+	}
+
+	resp := managementSettingsResponse("Management settings updated", stored)
 	if err := writeJSON(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to write JSON response")
 	}
@@ -308,6 +357,76 @@ func handleManagementSettingsGet(
 	}
 	if err := writeJSON(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to write JSON response")
+	}
+}
+
+func makeManagementBlockHandler(
+	filterUseCase filter.UseCase,
+	managementUseCase management.UseCase,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, []string{http.MethodPost})
+
+			return
+		}
+
+		if filterUseCase == nil {
+			http.Error(w, "filter usecase is not configured", http.StatusInternalServerError)
+
+			return
+		}
+		if managementUseCase == nil {
+			http.Error(w, "management settings usecase is not configured", http.StatusInternalServerError)
+
+			return
+		}
+
+		result, err := filterUseCase.BlockAll(r.Context())
+		if err != nil {
+			switch {
+			case errors.Is(err, filter.ErrNotConfigured):
+				http.Error(w, "filter is not configured", http.StatusServiceUnavailable)
+
+				return
+			default:
+				http.Error(w, "failed to block all connections", http.StatusInternalServerError)
+
+				return
+			}
+		}
+
+		runtimeStatus := managementUseCase.RuntimeStatus(r.Context())
+		resp := restv1.BlockManagementResponse{
+			Message:               "All allow rules were flushed",
+			PendingEntriesRemoved: result.PendingEntriesRemoved,
+			ActiveFlowsRemoved:    result.ActiveFlowsRemoved,
+			RuntimeAttached:       runtimeStatus.Attached,
+			RuntimeIface:          runtimeStatus.Iface,
+		}
+		if err := writeJSON(w, resp); err != nil {
+			log.Error().Err(err).Msg("Failed to write JSON response")
+		}
+	}
+}
+
+func managementSettingsResponse(
+	message string,
+	stored management.StoredSettings,
+) restv1.UpsertManagementSettingsResponse {
+	return restv1.UpsertManagementSettingsResponse{
+		Message:            message,
+		AuthConfigured:     stored.Issuer != "" && stored.JWKSURL != "",
+		RuntimeAttached:    stored.Runtime.Attached,
+		RuntimeIface:       stored.Runtime.Iface,
+		Issuer:             stored.Issuer,
+		Audience:           stored.Audience,
+		JWKSURL:            stored.JWKSURL,
+		RequiredScope:      stored.RequiredScope,
+		GuardedPortsRange:  stored.GuardedPortsRange,
+		Iface:              stored.Iface,
+		HandshakeWindowSec: stored.HandshakeWindowSec,
+		UpdatedAt:          stored.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -447,4 +566,150 @@ func extractBearerAccessToken(headerValue string) (string, error) {
 	}
 
 	return token, nil
+}
+
+func logMutationRequestSource(r *http.Request, operation string) {
+	sourceIP := sourceIPFromRequest(r)
+	log.Info().
+		Str("operation", operation).
+		Str("method", r.Method).
+		Str("path", r.URL.Path).
+		Str("source_ip", sourceIP).
+		Msg("Mutation request source recorded")
+}
+
+func logMutationAuthError(r *http.Request, operation string) {
+	sourceIP := sourceIPFromRequest(r)
+	log.Warn().
+		Str("operation", operation).
+		Str("method", r.Method).
+		Str("path", r.URL.Path).
+		Str("source_ip", sourceIP).
+		Msg("Mutation request auth error")
+}
+
+func sourceIPFromRequest(r *http.Request) string {
+	if r == nil {
+		return "unknown"
+	}
+
+	remote := strings.TrimSpace(r.RemoteAddr)
+	if remote == "" {
+		return "unknown"
+	}
+
+	host, _, err := net.SplitHostPort(remote)
+	if err != nil {
+		if ip := net.ParseIP(remote); ip != nil {
+			return ip.String()
+		}
+
+		return remote
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.String()
+	}
+
+	return host
+}
+
+type allowAuthorizationOptions struct {
+	Method                         string
+	Operation                      string
+	SettingsNotFoundStatus         int
+	SettingsNotFoundMessage        string
+	AuthorizationUnavailableStatus int
+	AuthorizationUnavailableBody   string
+	AuthorizationFailureBody       string
+}
+
+func withAllowAuthorization(
+	managementUseCase management.UseCase,
+	options allowAuthorizationOptions,
+	next http.Handler,
+) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if options.Method != "" && r.Method != options.Method {
+			next.ServeHTTP(w, r)
+
+			return
+		}
+
+		if managementUseCase == nil {
+			http.Error(w, "management settings usecase is not configured", http.StatusInternalServerError)
+
+			return
+		}
+
+		accessToken, err := extractBearerAccessToken(r.Header.Get("Authorization"))
+		if err != nil {
+			logMutationAuthError(r, options.Operation)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
+			return
+		}
+
+		if err := managementUseCase.AuthorizeAllow(r.Context(), accessToken); err != nil {
+			logMutationAuthError(r, options.Operation)
+			writeAllowAuthorizationError(w, options, err)
+
+			return
+		}
+
+		logMutationRequestSource(r, options.Operation)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func writeAllowAuthorizationError(w http.ResponseWriter, options allowAuthorizationOptions, err error) {
+	switch {
+	case errors.Is(err, management.ErrInvalidAccessToken):
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	case errors.Is(err, management.ErrSettingsNotFound):
+		http.Error(w, settingsNotFoundMessage(options), settingsNotFoundStatus(options))
+	case errors.Is(err, management.ErrAuthorizationUnavailable):
+		http.Error(w, authorizationUnavailableMessage(options), authorizationUnavailableStatus(options))
+	default:
+		http.Error(w, authorizationFailureMessage(options), http.StatusInternalServerError)
+	}
+}
+
+func settingsNotFoundStatus(options allowAuthorizationOptions) int {
+	if options.SettingsNotFoundStatus != 0 {
+		return options.SettingsNotFoundStatus
+	}
+
+	return http.StatusServiceUnavailable
+}
+
+func settingsNotFoundMessage(options allowAuthorizationOptions) string {
+	if options.SettingsNotFoundMessage != "" {
+		return options.SettingsNotFoundMessage
+	}
+
+	return "Authorization is unavailable"
+}
+
+func authorizationUnavailableStatus(options allowAuthorizationOptions) int {
+	if options.AuthorizationUnavailableStatus != 0 {
+		return options.AuthorizationUnavailableStatus
+	}
+
+	return http.StatusServiceUnavailable
+}
+
+func authorizationUnavailableMessage(options allowAuthorizationOptions) string {
+	if options.AuthorizationUnavailableBody != "" {
+		return options.AuthorizationUnavailableBody
+	}
+
+	return "Authorization is unavailable"
+}
+
+func authorizationFailureMessage(options allowAuthorizationOptions) string {
+	if options.AuthorizationFailureBody != "" {
+		return options.AuthorizationFailureBody
+	}
+
+	return "authorization failed"
 }

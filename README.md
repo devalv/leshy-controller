@@ -84,7 +84,7 @@
 │   │   │   ├── router/
 │   │   │   │   └── `router.go`   # Root router (/api/v1, /api/healthz)
 │   │   │   └── v1/
-│   │   │       └── `api.go`      # HTTP handlers v1, mapping -> usecases
+│   │   │       └── `api.go`      # HTTP handlers v1, auth middleware + mapping -> usecases
 │   │   │
 │   │   └── grpc/                 # roadmap: mirror/replace REST routes via gRPC
 │   │
@@ -140,9 +140,11 @@
 
 Текущая схема:
 1. `POST /api/v1/management/settings` доступен только в bootstrap-режиме (заголовок `X-Bootstrap-Token`).
-2. В `settings` передаются все runtime-параметры фильтра: `iface`, `guarded_ports_range`, `handshake_window_sec`.
-3. После успешного сохранения settings приложение динамически поднимает/обновляет eBPF runtime и начинает обслуживать `POST /api/v1/allow`.
-4. `JWT` для `/allow` проверяется по `JWKS` внешней системы (`EdDSA / Ed25519`).
+2. `PATCH /api/v1/management/settings` доступен только после первичной конфигурации и авторизуется тем же `Bearer` access token, что и `/allow`.
+3. В `settings` передаются runtime-параметры фильтра: `iface`, `guarded_ports_range`, `handshake_window_sec`.
+4. `POST /api/v1/management/block` очищает разрешающие правила (`pending` и `active_flows`), созданные через `/allow`.
+5. После успешного `POST` или `PATCH` приложение динамически поднимает/обновляет eBPF runtime.
+6. `JWT` для `/allow`, `PATCH /management/settings` и `POST /management/block` проверяется по `JWKS` внешней системы (`EdDSA / Ed25519`).
 
 ### 1. Подготовка bootstrap-токена
 
@@ -239,26 +241,83 @@ curl -X POST "http://<host>:9090/api/v1/allow" \
   -d '{"ip":"203.0.113.10","port":3389}'
 ```
 
-### 5. Поведение после настройки
+### 5. Обновление настроек (`PATCH /api/v1/management/settings`)
 
-1. После первого успешного `POST /api/v1/management/settings` endpoint блокируется (`409 management settings are locked`), включая сценарий после перезапуска приложения.
-2. После перезапуска приложение читает сохранённые settings из SQLite и повторно применяет их в runtime (attach выполняется автоматически при наличии сохраненных настроек).
-3. Для ротации ключей публикуйте новый ключ в JWKS с новым `kid`, затем выпускайте новые JWT с этим `kid`.
-4. Если `management_bootstrap_token` не задан в конфиге, `POST /api/v1/management/settings` вернёт `503`.
-5. Если settings еще не заданы, runtime не подключен:
+Для изменения уже сохраненных настроек используйте `PATCH` и тот же access token, что используется для `/allow`:
+```bash
+curl -X PATCH "http://<host>:9090/api/v1/management/settings" \
+  -H "Authorization: Bearer <JWT_ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "issuer": "https://auth.example.com",
+    "audience": "leshy-controller",
+    "jwks_url": "https://auth.example.com/.well-known/jwks.json",
+    "required_scope": "allow:write",
+    "guarded_ports_range": "3389-3395",
+    "iface": "ens18",
+    "handshake_window_sec": 900
+  }'
+```
+Примечание: сейчас `PATCH` ожидает полный объект settings (не partial update).
+
+### 6. Экстренная блокировка (`POST /api/v1/management/block`)
+
+Ручка очищает все разрешения, ранее выданные через `/allow`:
+- удаляет записи из `pending`;
+- удаляет записи из `active_flows`.
+
+Запрос:
+```bash
+curl -X POST "http://<host>:9090/api/v1/management/block" \
+  -H "Authorization: Bearer <JWT_ACCESS_TOKEN>"
+```
+
+Пример успешного ответа:
+```json
+{
+  "message": "All allow rules were flushed",
+  "pending_entries_removed": 3,
+  "active_flows_removed": 2,
+  "runtime_attached": true,
+  "runtime_iface": "ens18"
+}
+```
+
+### 7. Поведение после настройки
+
+1. После первого успешного `POST /api/v1/management/settings` bootstrap-endpoint блокируется (`409 management settings are locked`), включая сценарий после перезапуска приложения.
+2. Для последующих изменений используется `PATCH /api/v1/management/settings` (Bearer JWT).
+3. После перезапуска приложение читает сохранённые settings из SQLite и повторно применяет их в runtime (attach выполняется автоматически при наличии сохраненных настроек).
+4. Для ротации ключей публикуйте новый ключ в JWKS с новым `kid`, затем выпускайте новые JWT с этим `kid`.
+5. Если `management_bootstrap_token` не задан в конфиге, `POST /api/v1/management/settings` вернёт `503`.
+6. Если settings еще не заданы, runtime не подключен:
    - `POST /api/v1/allow` вернет `503 filter is not configured`
    - `GET /api/v1/stats` вернет `503 filter is not configured`
    - `GET /api/healthz` вернет JSON с `runtime_attached: false`
-6. Runtime-статус дублируется в:
+7. Runtime-статус дублируется в:
    - `GET /api/healthz` (`runtime_attached`, `runtime_iface`)
    - `GET /api/v1/management/settings`
    - `POST /api/v1/management/settings`
+   - `PATCH /api/v1/management/settings`
+   - `POST /api/v1/management/block`
+8. Типовые ответы для `PATCH /api/v1/management/settings`:
+   - `200` при успешном обновлении;
+   - `400` при ошибках валидации тела запроса;
+   - `401` при невалидном или отсутствующем `Authorization: Bearer ...`;
+   - `409` если настройки еще не были заданы;
+   - `503` если авторизация временно недоступна (`authorization unavailable`).
+9. Типовые ответы для `POST /api/v1/management/block`:
+   - `200` при успешной очистке разрешающих правил;
+   - `401` при невалидном или отсутствующем `Authorization: Bearer ...`;
+   - `409` если настройки еще не были заданы;
+   - `503` если авторизация или filter-runtime недоступны;
+   - `500` при внутренней ошибке очистки.
 
-### 6. Пошаговый пример для stub-auth как подключить внешний auth-сервис
+### 8. Пошаговый пример для stub-auth как подключить внешний auth-сервис
 
 [GitHub Gist](https://gist.github.com/devalv/33998fbcf2d1ae3ba53c835340ba3614)
 
-### 7. Сброс настроек
+### 9. Сброс настроек
 
 1. Остановите leshy-controller
 2. Удалите локальную БД (файл)

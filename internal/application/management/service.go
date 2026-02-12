@@ -100,6 +100,24 @@ func (s *Service) SaveSettings(ctx context.Context, settings Settings) (StoredSe
 	return stored, nil
 }
 
+// UpdateSettings updates existing management settings.
+// Returns ErrSettingsNotFound when management settings were not configured yet.
+func (s *Service) UpdateSettings(ctx context.Context, settings Settings) (StoredSettings, error) {
+	if s.repository == nil {
+		return StoredSettings{}, errors.New("repository is nil")
+	}
+
+	if _, err := s.repository.LoadSettings(ctx); err != nil {
+		if errors.Is(err, ErrSettingsNotFound) {
+			return StoredSettings{}, ErrSettingsNotFound
+		}
+
+		return StoredSettings{}, fmt.Errorf("load management settings: %w", err)
+	}
+
+	return s.SaveSettings(ctx, settings)
+}
+
 // GetSettings reads current management settings from repository.
 func (s *Service) GetSettings(ctx context.Context) (StoredSettings, error) {
 	if s.repository == nil {

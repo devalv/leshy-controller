@@ -12,6 +12,7 @@ type backendStub struct {
 	isGuardedFn func(ctx context.Context, port uint16) (bool, error)
 	insertFn    func(ctx context.Context, ip net.IP, port uint16, window time.Duration) error
 	statsFn     func(ctx context.Context) (Counters, error)
+	flushFn     func(ctx context.Context) (FlushResult, error)
 	verifyFn    func(ctx context.Context, ip net.IP, port uint16) error
 }
 
@@ -37,6 +38,14 @@ func (s *backendStub) Stats(ctx context.Context) (Counters, error) {
 	}
 
 	return s.statsFn(ctx)
+}
+
+func (s *backendStub) FlushAuthorizations(ctx context.Context) (FlushResult, error) {
+	if s.flushFn == nil {
+		return FlushResult{}, nil
+	}
+
+	return s.flushFn(ctx)
 }
 
 func (s *backendStub) VerifyPending(ctx context.Context, ip net.IP, port uint16) error {
@@ -144,5 +153,83 @@ func TestServiceStatsRequiresRuntimeConfiguration(t *testing.T) {
 	_, err := service.Stats(context.Background())
 	if !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("expected ErrNotConfigured, got %v", err)
+	}
+}
+
+func TestServiceBlockAllRequiresRuntimeConfiguration(t *testing.T) {
+	t.Parallel()
+
+	service := New(nil, Options{})
+	_, err := service.BlockAll(context.Background())
+	if !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("expected ErrNotConfigured, got %v", err)
+	}
+}
+
+func TestServiceBlockAll(t *testing.T) {
+	t.Parallel()
+
+	backendErr := errors.New("flush failed")
+
+	tests := []struct {
+		name       string
+		flushFn    func(ctx context.Context) (FlushResult, error)
+		wantErr    error
+		wantResult FlushResult
+	}{
+		{
+			name: "backend error",
+			flushFn: func(context.Context) (FlushResult, error) {
+				return FlushResult{}, backendErr
+			},
+			wantErr: backendErr,
+		},
+		{
+			name: "success",
+			flushFn: func(context.Context) (FlushResult, error) {
+				return FlushResult{
+					PendingEntriesRemoved: 3,
+					ActiveFlowsRemoved:    2,
+				}, nil
+			},
+			wantResult: FlushResult{
+				PendingEntriesRemoved: 3,
+				ActiveFlowsRemoved:    2,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			service := New(nil, Options{})
+			err := service.ConfigureRuntime(&backendStub{
+				flushFn: tt.flushFn,
+			}, 10*time.Second)
+			if err != nil {
+				t.Fatalf("configure runtime: %v", err)
+			}
+
+			got, blockErr := service.BlockAll(context.Background())
+			if tt.wantErr != nil {
+				if blockErr == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !errors.Is(blockErr, tt.wantErr) {
+					t.Fatalf("expected error %v, got %v", tt.wantErr, blockErr)
+				}
+
+				return
+			}
+
+			if blockErr != nil {
+				t.Fatalf("unexpected error: %v", blockErr)
+			}
+			if got != tt.wantResult {
+				t.Fatalf("result = %+v, want %+v", got, tt.wantResult)
+			}
+		})
 	}
 }
