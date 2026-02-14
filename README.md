@@ -156,6 +156,18 @@ openssl rand -base64 48 | tr '+/' '-_' | tr -d '='
 ```yaml
 management_bootstrap_token: "REPLACE_WITH_RANDOM_TOKEN"
 ```
+
+3. Сгенерируйте самоподписанные TLS-сертификаты, если нет готовых
+```bash
+openssl req -newkey rsa:2048 -nodes -keyout server.key -x509 -days 365 -out server.crt
+```
+
+4. Запишите путь в конфиг приложения (`config.yml`):
+```yaml
+crt_path: ./server.crt
+key_path: ./server.key
+```
+
 3. Защитите файл конфига правами доступа только для пользователя сервиса.
 4. Запустите приложение.
 

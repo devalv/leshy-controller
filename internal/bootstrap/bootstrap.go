@@ -111,7 +111,7 @@ func New(ctx context.Context, cfg *config.Config) (*runtime.Application, error) 
 	})
 
 	// http server
-	httpSrv := httpserver.New(cfg.APIListenAddr, root)
+	httpSrv := httpserver.New(cfg.APIListenAddr, cfg.CrtPath, cfg.KeyPath, root)
 
 	// closer server: держит runtime-applier живым и закрывает при shutdown
 	closer := runtime.NewCloserServer("leshybpf", func(stopCtx context.Context) error {

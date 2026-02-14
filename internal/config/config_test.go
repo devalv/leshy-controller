@@ -349,6 +349,18 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	validCertFile := filepath.Join(tmpDir, "server.crt")
+	err = os.WriteFile(validCertFile, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	validKeyFile := filepath.Join(tmpDir, "server.key")
+	err = os.WriteFile(validKeyFile, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	tests := []struct {
 		name     string
 		config   Config
@@ -363,6 +375,8 @@ func TestConfigValidate(t *testing.T) {
 				SettingsDBPath:     validSettingsDB,
 				APIListenAddr:      "127.0.0.1:9090",
 				ShutdownTimeoutSec: 5,
+				CrtPath:            validCertFile,
+				KeyPath:            validKeyFile,
 			},
 			wantErr: false,
 		},
@@ -374,9 +388,11 @@ func TestConfigValidate(t *testing.T) {
 				APIListenAddr:      "invalid",
 				ShutdownTimeoutSec: 0,
 				SettingsDBPath:     "",
+				CrtPath:            "",
+				KeyPath:            "",
 			},
 			wantErr:  true,
-			errCount: 5, // all validated fields invalid
+			errCount: 7, // all validated fields invalid
 		},
 		{
 			name: "invalid BPF path only",
@@ -386,6 +402,8 @@ func TestConfigValidate(t *testing.T) {
 				APIListenAddr:      "127.0.0.1:9090",
 				ShutdownTimeoutSec: 5,
 				SettingsDBPath:     validSettingsDB,
+				CrtPath:            validCertFile,
+				KeyPath:            validKeyFile,
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -398,6 +416,8 @@ func TestConfigValidate(t *testing.T) {
 				APIListenAddr:      "127.0.0.1:9090",
 				ShutdownTimeoutSec: 61, // > 61 secs
 				SettingsDBPath:     validSettingsDB,
+				CrtPath:            validCertFile,
+				KeyPath:            validKeyFile,
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -410,6 +430,36 @@ func TestConfigValidate(t *testing.T) {
 				APIListenAddr:      "127.0.0.1:9090",
 				ShutdownTimeoutSec: 5,
 				SettingsDBPath:     "", // bad path
+				CrtPath:            validCertFile,
+				KeyPath:            validKeyFile,
+			},
+			wantErr:  true,
+			errCount: 1,
+		},
+		{
+			name: "invalid cert file path only",
+			config: Config{
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				APIListenAddr:      "127.0.0.1:9090",
+				ShutdownTimeoutSec: 5,
+				SettingsDBPath:     validSettingsDB,
+				CrtPath:            "",
+				KeyPath:            validKeyFile,
+			},
+			wantErr:  true,
+			errCount: 1,
+		},
+		{
+			name: "invalid key file path only",
+			config: Config{
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				APIListenAddr:      "127.0.0.1:9090",
+				ShutdownTimeoutSec: 5,
+				SettingsDBPath:     validSettingsDB,
+				CrtPath:            validCertFile,
+				KeyPath:            "",
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -628,6 +678,8 @@ bpf_pin_path: /sys/fs/bpf/
 api_listen_addr: 127.0.0.1:9090
 shutdown_timeout_sec: 5
 db_path: ./leshy-db.db
+crt_path: ./server.crt
+key_path: ./server.key
 `
 
 	// Create temp directory and file structure
@@ -661,6 +713,20 @@ db_path: ./leshy-db.db
 		t.Fatal(err)
 	}
 
+	// Create cert file
+	certFile := filepath.Join(tmpDir, "server.crt")
+	err = os.WriteFile(certFile, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create key file
+	keyFile := filepath.Join(tmpDir, "server.key")
+	err = os.WriteFile(keyFile, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Update config content with actual paths
 	configContent = `
 debug: true
@@ -669,6 +735,8 @@ bpf_pin_path: ` + bpfPinDir + `
 api_listen_addr: 127.0.0.1:9090
 shutdown_timeout_sec: 5
 db_path: ` + dbFile + `
+crt_path: ` + certFile + `
+key_path: ` + keyFile + `
 `
 
 	err = os.WriteFile(configFile, []byte(configContent), 0o644)
@@ -760,6 +828,118 @@ func TestValidateSettingsDBPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateSettingsDBPath(tt.path)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// Tests for validateCertPath
+
+func TestValidateCertPath(t *testing.T) {
+	tmpDir := createTempDir(t)
+	defer os.RemoveAll(tmpDir)
+
+	validCert := filepath.Join(tmpDir, "server.crt")
+	err := os.WriteFile(validCert, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		path        string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:        "empty path",
+			path:        "",
+			wantErr:     true,
+			errContains: "CrtPath cannot be empty",
+		},
+		{
+			name:    "valid cert path",
+			path:    validCert,
+			wantErr: false,
+		},
+		{
+			name:        "directory instead of file",
+			path:        tmpDir,
+			wantErr:     true,
+			errContains: "is a directory, not a file",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateCrtPath(tt.path)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// Tests for validateKeyPath
+
+func TestValidateKeyPath(t *testing.T) {
+	tmpDir := createTempDir(t)
+	defer os.RemoveAll(tmpDir)
+
+	validKey := filepath.Join(tmpDir, "server.key")
+	err := os.WriteFile(validKey, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		path        string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:        "empty path",
+			path:        "",
+			wantErr:     true,
+			errContains: "KeyPath cannot be empty",
+		},
+		{
+			name:    "valid key path",
+			path:    validKey,
+			wantErr: false,
+		},
+		{
+			name:        "directory instead of file",
+			path:        tmpDir,
+			wantErr:     true,
+			errContains: "is a directory, not a file",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateKeyPath(tt.path)
 
 			if tt.wantErr {
 				if err == nil {

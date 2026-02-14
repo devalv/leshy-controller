@@ -24,6 +24,8 @@ type Config struct {
 	ManagementBootstrapToken string `yaml:"management_bootstrap_token"`
 	APIListenAddr            string `yaml:"api_listen_addr"`
 	ShutdownTimeoutSec       int    `yaml:"shutdown_timeout_sec"`
+	CrtPath                  string `yaml:"crt_path"`
+	KeyPath                  string `yaml:"key_path"`
 
 	ConfigPath string
 }
@@ -35,6 +37,44 @@ func validateConfigPath(path string) error {
 		return fmt.Errorf("failed to validate config path: %w", err)
 	}
 
+	if s.IsDir() {
+		return fmt.Errorf("'%s' is a directory, not a file", path)
+	}
+
+	return nil
+}
+
+// Проверяем наличие CRT файла.
+func validateCrtPath(path string) error {
+	if path == "" {
+		return errors.New("CrtPath cannot be empty")
+	}
+
+	s, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to validate CrtPath: %w", err)
+	}
+
+	// Проверяем, что это не директория
+	if s.IsDir() {
+		return fmt.Errorf("'%s' is a directory, not a file", path)
+	}
+
+	return nil
+}
+
+// Проверяем наличие KEY файла.
+func validateKeyPath(path string) error {
+	if path == "" {
+		return errors.New("KeyPath cannot be empty")
+	}
+
+	s, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to validate KeyPath: %w", err)
+	}
+
+	// Проверяем, что это не директория
 	if s.IsDir() {
 		return fmt.Errorf("'%s' is a directory, not a file", path)
 	}
@@ -237,6 +277,14 @@ func (cfg *Config) Validate() error {
 
 	if err := validateSettingsDBPath(cfg.SettingsDBPath); err != nil {
 		errs = append(errs, fmt.Errorf("SettingsDBPath: %w", err))
+	}
+
+	if err := validateCrtPath(cfg.CrtPath); err != nil {
+		errs = append(errs, fmt.Errorf("CrtPath: %w", err))
+	}
+
+	if err := validateKeyPath(cfg.KeyPath); err != nil {
+		errs = append(errs, fmt.Errorf("KeyPath: %w", err))
 	}
 
 	// Объединяем все ошибки в одну
