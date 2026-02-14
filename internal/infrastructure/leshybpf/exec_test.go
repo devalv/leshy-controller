@@ -103,7 +103,7 @@ func TestStartCmd_CancelStopsProcess(t *testing.T) {
 	}
 
 	// Варианты: context deadline/canceled или exit error из-за kill.
-	// У нас cancel() вызывает cancel контекста, поэтому ожидаем context.Canceled
+	// cancel() вызывает cancel контекста, поэтому ожидаем context.Canceled
 	if !errors.Is(err, context.Canceled) && !strings.Contains(strings.ToLower(err.Error()), "signal") {
 		// просто фиксируем, что это действительно ошибка, а не "успех"
 		t.Logf("wait error after cancel: %v", err)

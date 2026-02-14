@@ -14,7 +14,7 @@ import (
 
 const defaultAttachTimeout = 30 * time.Second
 
-// RuntimeSettingsApplierOptions configure runtime management settings application.
+// RuntimeSettingsApplierOptions конфигурирует runtime настройки управления приложения.
 type RuntimeSettingsApplierOptions struct {
 	BPFPinPath     string
 	BPFProgramPath string
@@ -22,7 +22,7 @@ type RuntimeSettingsApplierOptions struct {
 	AttachTimeout  time.Duration
 }
 
-// RuntimeSettingsApplier applies management settings to attached eBPF runtime.
+// RuntimeSettingsApplier применяет настройки управления к прикрепленному eBPF runtime.
 type RuntimeSettingsApplier struct {
 	mu sync.Mutex
 
@@ -37,7 +37,7 @@ type RuntimeSettingsApplier struct {
 	currentIface string
 }
 
-// NewRuntimeSettingsApplier creates a new runtime settings applier.
+// NewRuntimeSettingsApplier создает новый runtime settings applier.
 func NewRuntimeSettingsApplier(
 	filterRuntime filter.RuntimeConfigurator,
 	options RuntimeSettingsApplierOptions,
@@ -52,7 +52,7 @@ func NewRuntimeSettingsApplier(
 	}
 }
 
-// Apply attaches (if needed) and applies runtime settings to BPF maps and filter service.
+// Apply при необходимости подключает и применяет настройки runtime к BPF-картам и фильтрующему сервису.
 func (a *RuntimeSettingsApplier) Apply(ctx context.Context, settings management.Settings) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -84,7 +84,7 @@ func (a *RuntimeSettingsApplier) Apply(ctx context.Context, settings management.
 	return nil
 }
 
-// Close closes attached manager and releases maps.
+// Close закрывает прикреплённый manager и высвобождает мапы.
 func (a *RuntimeSettingsApplier) Close() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -107,7 +107,7 @@ func (a *RuntimeSettingsApplier) Close() error {
 	return nil
 }
 
-// RuntimeStatus reports whether BPF manager is currently attached.
+// RuntimeStatus сообщает, прикреплен ли в данный момент BPF-менеджер.
 func (a *RuntimeSettingsApplier) RuntimeStatus(_ context.Context) management.RuntimeStatus {
 	a.mu.Lock()
 	defer a.mu.Unlock()

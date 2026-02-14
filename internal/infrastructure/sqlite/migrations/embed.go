@@ -21,7 +21,7 @@ type Migration struct {
 
 const migrationFileNameParts = 2
 
-// Embedded returns all embedded SQL migrations sorted by version.
+// Embedded возвращает список SQL-миграций, отсортированных по версии.
 func Embedded() ([]Migration, error) {
 	entries, err := fs.ReadDir(sqlMigrationsFS, "sql")
 	if err != nil {

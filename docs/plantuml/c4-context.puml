@@ -1,0 +1,29 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_LEFT_RIGHT()
+title leshy-controller - C4 Level 1 (System Context)
+
+Person(user, "User", "Uses client software to access remote sessions")
+Person(admin, "Administrator", "Manages connection access rules")
+
+System_Ext(client, "Client Application", "External client software")
+System_Ext(dispatcher, "Connection Dispatcher", "External control plane")
+System_Ext(proxy, "Proxy Gateway", "External traffic forwarding gateway")
+System_Ext(remote, "Remote Server/ARM", "External remote target")
+
+System_Boundary(leshy_boundary, "leshy-controller") {
+  System(leshy, "leshy-controller", "Connection filtering and management control")
+}
+
+Rel(user, client, "Uses")
+Rel(client, dispatcher, "Requests connection parameters")
+Rel(admin, dispatcher, "Configures access policies")
+Rel(dispatcher, leshy, "Calls REST API (/management/*, /allow, /stats)")
+Rel(dispatcher, proxy, "Configures forwarding rules")
+Rel(client, proxy, "Connects to remote session through gateway")
+Rel(proxy, remote, "Forwards traffic")
+Rel(leshy, proxy, "Enforces guarded port access on host")
+
+SHOW_LEGEND()
+@enduml

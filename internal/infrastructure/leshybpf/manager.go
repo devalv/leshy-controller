@@ -14,7 +14,7 @@ type Manager struct {
 	Program     *ebpf.Program
 }
 
-// Close releases collection.
+// Close освобождает коллекцию.
 func (m *Manager) Close() error {
 	if m == nil || m.coll == nil {
 		return nil

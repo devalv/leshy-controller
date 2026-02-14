@@ -106,7 +106,7 @@ func (v *Verifier) ValidateSettings(ctx context.Context, settings management.Set
 	return nil
 }
 
-func (v *Verifier) VerifyAllowToken(
+func (v *Verifier) VerifyAccessToken(
 	ctx context.Context,
 	settings management.Settings,
 	accessToken string,

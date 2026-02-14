@@ -45,7 +45,7 @@ func NewEmbeddedRunner(db *sql.DB) (*Runner, error) {
 	return runner, nil
 }
 
-// Up applies pending migrations in ascending version order.
+// Up применяет миграции в порядке возрастания версий.
 func (r *Runner) Up(ctx context.Context) error {
 	if err := r.ensureSchemaTable(ctx); err != nil {
 		return fmt.Errorf("ensure schema_migrations table: %w", err)

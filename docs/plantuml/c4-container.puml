@@ -1,0 +1,38 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_LEFT_RIGHT()
+title leshy-controller - C4 Level 2 (Container)
+
+System_Ext(dispatcher, "Connection Dispatcher", "External control plane")
+System_Ext(kernel, "Linux Kernel (TC/eBPF)", "Host networking runtime")
+System_Ext(jwks, "JWKS Provider", "External auth service")
+
+System_Boundary(leshy_boundary, "leshy-controller") {
+  Container(api, "REST API", "Go net/http", "/api/healthz and /api/v1 routes")
+  Container(grpc, "gRPC API", "Go gRPC", "Roadmap: mirror/replace REST routes")
+  Container(mgmt, "Management Service", "Go application service", "Bootstrap auth, JWT auth, settings validation")
+  Container(filt, "Filter Service", "Go application service", "allow/stats/block orchestration")
+  Container(verifier, "JWT/JWKS Verifier", "Go infrastructure adapter", "Ed25519 verification and JWKS cache/fetch")
+  Container(repo, "Settings Repository", "Go infrastructure adapter", "Raw SQL management settings persistence")
+  Container(runtime, "Runtime Settings Applier", "Go infrastructure adapter", "Attach manager and dynamic runtime apply")
+  ContainerDb(settings_db, "SQLite", "SQLite", "management_settings data")
+}
+
+Rel(dispatcher, api, "HTTPS/REST")
+Rel(api, mgmt, "settings get/post/patch and authorization")
+Rel(api, filt, "allow/stats/block use cases")
+Rel(api, grpc, "Future API parity")
+
+Rel(mgmt, repo, "Load/Save settings")
+Rel(repo, settings_db, "Read/Write")
+
+Rel(mgmt, verifier, "ValidateSettings, VerifyAccessToken")
+Rel(verifier, jwks, "Fetches public keys (HTTPS JWKS)")
+
+Rel(mgmt, runtime, "Apply settings and read runtime status")
+Rel(runtime, kernel, "Attach eBPF and update maps")
+Rel(filt, kernel, "Runtime backend operations")
+
+SHOW_LEGEND()
+@enduml

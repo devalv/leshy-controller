@@ -33,7 +33,7 @@ func TestVerifierValidateSettings(t *testing.T) {
 	}
 }
 
-func TestVerifierVerifyAllowToken(t *testing.T) {
+func TestVerifierVerifyAccessToken(t *testing.T) {
 	t.Parallel()
 
 	pub, privateKey, kid, jwksURL := createJWKSFixture(t)
@@ -117,7 +117,7 @@ func TestVerifierVerifyAllowToken(t *testing.T) {
 			t.Parallel()
 
 			v := NewVerifier(tt.options)
-			err := v.VerifyAllowToken(context.Background(), settings, tt.token)
+			err := v.VerifyAccessToken(context.Background(), settings, tt.token)
 			if tt.wantErr != nil {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -136,7 +136,7 @@ func TestVerifierVerifyAllowToken(t *testing.T) {
 	}
 }
 
-func TestVerifierVerifyAllowTokenJWKSUnavailable(t *testing.T) {
+func TestVerifierVerifyAccessTokenJWKSUnavailable(t *testing.T) {
 	t.Parallel()
 
 	pub, privateKey, kid, _ := createJWKSFixture(t)
@@ -161,7 +161,7 @@ func TestVerifierVerifyAllowTokenJWKSUnavailable(t *testing.T) {
 		Now: func() time.Time { return now },
 	})
 
-	err := v.VerifyAllowToken(context.Background(), management.Settings{
+	err := v.VerifyAccessToken(context.Background(), management.Settings{
 		Issuer:        "https://auth.example.com",
 		Audience:      "leshy-controller",
 		JWKSURL:       brokenJWKS.URL,

@@ -49,7 +49,7 @@ func New(backend Backend, opts Options) *Service {
 	}
 }
 
-// ConfigureRuntime replaces backend and window used by Allow/Stats at runtime.
+// ConfigureRuntime заменяет бэкенд и окно, используемые Allow/Stats во время выполнения.
 func (s *Service) ConfigureRuntime(backend Backend, window time.Duration) error {
 	if backend == nil {
 		return errors.New("backend is nil")
@@ -131,7 +131,7 @@ func (s *Service) Stats(ctx context.Context) (Stats, error) {
 	}, nil
 }
 
-// BlockAll clears all runtime allow-related entries previously created via Allow.
+// BlockAll блогирует все активные разрешения выданные в системе.
 func (s *Service) BlockAll(ctx context.Context) (FlushResult, error) {
 	s.mu.RLock()
 	backend := s.backend

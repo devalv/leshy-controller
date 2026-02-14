@@ -40,7 +40,7 @@ type Options struct {
 	RuntimeStatusProvider RuntimeStatusProvider
 }
 
-// Service orchestrates management settings validation, persistence and authorization.
+// Service координирует проверку, хранение и авторизацию настроек управления.
 type Service struct {
 	repository            Repository
 	verifier              Verifier
@@ -49,7 +49,7 @@ type Service struct {
 	bootstrapToken        string
 }
 
-// New creates a new management Service.
+// New создает новый сервис управления.
 func New(repository Repository, verifier Verifier, options Options) *Service {
 	statusProvider := options.RuntimeStatusProvider
 	if statusProvider == nil {
@@ -67,7 +67,7 @@ func New(repository Repository, verifier Verifier, options Options) *Service {
 	}
 }
 
-// SaveSettings validates management settings, verifies JWKS provider and stores settings in repository.
+// SaveSettings проверяет настройки управления, верифицирует JWKS-провайдер и сохраняет настройки в репозитории (БД).
 func (s *Service) SaveSettings(ctx context.Context, settings Settings) (StoredSettings, error) {
 	if s.repository == nil {
 		return StoredSettings{}, errors.New("repository is nil")
@@ -100,8 +100,8 @@ func (s *Service) SaveSettings(ctx context.Context, settings Settings) (StoredSe
 	return stored, nil
 }
 
-// UpdateSettings updates existing management settings.
-// Returns ErrSettingsNotFound when management settings were not configured yet.
+// UpdateSettings обновляет существующие настройки управления.
+// Возвращает ErrSettingsNotFound, если настройки управления еще не были сконфигурированы.
 func (s *Service) UpdateSettings(ctx context.Context, settings Settings) (StoredSettings, error) {
 	if s.repository == nil {
 		return StoredSettings{}, errors.New("repository is nil")
@@ -118,7 +118,7 @@ func (s *Service) UpdateSettings(ctx context.Context, settings Settings) (Stored
 	return s.SaveSettings(ctx, settings)
 }
 
-// GetSettings reads current management settings from repository.
+// GetSettings читает текущие настройки управления из репозитория (БД).
 func (s *Service) GetSettings(ctx context.Context) (StoredSettings, error) {
 	if s.repository == nil {
 		return StoredSettings{}, errors.New("repository is nil")
@@ -137,7 +137,7 @@ func (s *Service) GetSettings(ctx context.Context) (StoredSettings, error) {
 	return stored, nil
 }
 
-// RuntimeStatus returns runtime state of dynamic BPF configuration.
+// RuntimeStatus возвращает состояние динамической BPF-конфигурации во время выполнения.
 func (s *Service) RuntimeStatus(ctx context.Context) RuntimeStatus {
 	if s.runtimeStatusProvider == nil {
 		return RuntimeStatus{}
@@ -146,7 +146,7 @@ func (s *Service) RuntimeStatus(ctx context.Context) RuntimeStatus {
 	return s.runtimeStatusProvider.RuntimeStatus(ctx)
 }
 
-// AuthorizeAllow validates incoming JWT access token for /allow operation.
+// AuthorizeAllow валидирует JWT access token.
 func (s *Service) AuthorizeAllow(ctx context.Context, accessToken string) error {
 	if s.repository == nil {
 		return errors.New("repository is nil")
@@ -169,7 +169,7 @@ func (s *Service) AuthorizeAllow(ctx context.Context, accessToken string) error 
 		return fmt.Errorf("load management settings: %w", err)
 	}
 
-	if err := s.verifier.VerifyAllowToken(ctx, stored.Settings, token); err != nil {
+	if err := s.verifier.VerifyAccessToken(ctx, stored.Settings, token); err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidAccessToken):
 			return ErrInvalidAccessToken
@@ -183,7 +183,7 @@ func (s *Service) AuthorizeAllow(ctx context.Context, accessToken string) error 
 	return nil
 }
 
-// AuthorizeSettingsBootstrap validates one-time bootstrap token and ensures settings are not configured yet.
+// AuthorizeSettingsBootstrap проверяет одноразовый bootstrap-токен для первоначальной настройки.
 func (s *Service) AuthorizeSettingsBootstrap(ctx context.Context, bootstrapToken string) error {
 	if s.repository == nil {
 		return errors.New("repository is nil")

@@ -17,7 +17,7 @@ const (
 	sqliteFilePermission = 0o600
 )
 
-// Open opens SQLite database with external driver and ensures DB file exists.
+// Open обеспечивает работу SQLite БД.
 func Open(ctx context.Context, dbPath string) (*sql.DB, error) {
 	path := strings.TrimSpace(dbPath)
 	if path == "" {
@@ -68,7 +68,7 @@ func ensureParentDirectory(dbPath string) error {
 }
 
 func ensureDBFile(dbPath string) error {
-	// #nosec G304 -- path comes from validated runtime configuration and should remain dynamic.
+	// #nosec G304 -- путь берется из проверенной конфигурации времени выполнения и должен оставаться динамическим.
 	file, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, sqliteFilePermission)
 	if err != nil {
 		return fmt.Errorf("open db file %s: %w", dbPath, err)

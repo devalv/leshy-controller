@@ -31,7 +31,7 @@ type StatsResponse struct {
 	DropRatePercent  float64 `json:"drop_rate_percent"`
 }
 
-// UpsertManagementSettingsRequest is a JSON contract for POST /management/settings.
+// UpsertManagementSettingsRequest — JSON-контракт для POST /management/settings запроса.
 type UpsertManagementSettingsRequest struct {
 	Issuer             string `json:"issuer"`
 	Audience           string `json:"audience"`
@@ -42,7 +42,7 @@ type UpsertManagementSettingsRequest struct {
 	HandshakeWindowSec int    `json:"handshake_window_sec"`
 }
 
-// UpsertManagementSettingsResponse is a JSON contract for POST /management/settings response.
+// UpsertManagementSettingsResponse — JSON-контракт для ответа на POST /management/settings запрос.
 type UpsertManagementSettingsResponse struct {
 	Message            string `json:"message"`
 	AuthConfigured     bool   `json:"auth_configured"`
@@ -58,7 +58,7 @@ type UpsertManagementSettingsResponse struct {
 	UpdatedAt          string `json:"updated_at"` // RFC3339 (UTC)
 }
 
-// GetManagementSettingsResponse is a JSON contract for GET /management/settings response.
+// GetManagementSettingsResponse — JSON-контракт для ответа на GET /management/settings запрос.
 type GetManagementSettingsResponse struct {
 	AuthConfigured     bool   `json:"auth_configured"`
 	RuntimeAttached    bool   `json:"runtime_attached"`
@@ -73,7 +73,7 @@ type GetManagementSettingsResponse struct {
 	UpdatedAt          string `json:"updated_at"` // RFC3339 (UTC)
 }
 
-// BlockManagementResponse is a JSON contract for POST /management/block response.
+// BlockManagementResponse — JSON-контракт для ответа на POST /management/block запрос.
 type BlockManagementResponse struct {
 	Message               string `json:"message"`
 	PendingEntriesRemoved uint64 `json:"pending_entries_removed"`

@@ -2,7 +2,7 @@ package management
 
 import "context"
 
-// UseCase is an application contract for management settings.
+// UseCase — это контракт приложения для настроек управления.
 type UseCase interface {
 	SaveSettings(ctx context.Context, settings Settings) (StoredSettings, error)
 	UpdateSettings(ctx context.Context, settings Settings) (StoredSettings, error)
@@ -12,24 +12,24 @@ type UseCase interface {
 	AuthorizeSettingsBootstrap(ctx context.Context, bootstrapToken string) error
 }
 
-// Repository is a storage contract for management settings.
+// Repository — это контракт хранилища для настроек управления.
 type Repository interface {
 	SaveSettings(ctx context.Context, settings Settings) (StoredSettings, error)
 	LoadSettings(ctx context.Context) (StoredSettings, error)
 }
 
-// Verifier validates JWT access tokens against configured management settings.
+// Verifier проверяет JWT-токены доступа на соответствие настроек управления.
 type Verifier interface {
 	ValidateSettings(ctx context.Context, settings Settings) error
-	VerifyAllowToken(ctx context.Context, settings Settings, accessToken string) error
+	VerifyAccessToken(ctx context.Context, settings Settings, accessToken string) error
 }
 
-// RuntimeApplier applies runtime network-related settings to the running process.
+// RuntimeApplier применяет runtime настройки к активному процессу.
 type RuntimeApplier interface {
 	Apply(ctx context.Context, settings Settings) error
 }
 
-// RuntimeStatusProvider reports runtime state of dynamic network controls.
+// RuntimeStatusProvider выводит динамическое состояние runtime приложения.
 type RuntimeStatusProvider interface {
 	RuntimeStatus(ctx context.Context) RuntimeStatus
 }

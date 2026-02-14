@@ -2,13 +2,13 @@ package management
 
 import "time"
 
-// RuntimeStatus describes runtime state of dynamic network controls.
+// RuntimeStatus описывает состояние runtime для того, к чему будет применяться фильтрация.
 type RuntimeStatus struct {
 	Attached bool
 	Iface    string
 }
 
-// Settings describes management authorization settings passed by external systems.
+// Settings описывает настройки присылаемые внешней системой при интеграции.
 type Settings struct {
 	Issuer             string
 	Audience           string
@@ -19,7 +19,7 @@ type Settings struct {
 	HandshakeWindowSec int
 }
 
-// StoredSettings represents settings persisted by the application.
+// StoredSettings описывает настройки хранящиеся в БД.
 type StoredSettings struct {
 	Settings
 

@@ -10,12 +10,12 @@ import (
 	"github.com/devalv/leshy-controller/internal/application/management"
 )
 
-// ManagementSettingsRepository provides SQLite-backed persistence for management settings.
+// ManagementSettingsRepository обеспечивает SQLite-backed для хранения настроек приложения.
 type ManagementSettingsRepository struct {
 	db *sql.DB
 }
 
-// NewManagementSettingsRepository creates repository backed by sql.DB.
+// NewManagementSettingsRepository создаёт Repository, поддерживаемый sql.DB.
 func NewManagementSettingsRepository(db *sql.DB) (*ManagementSettingsRepository, error) {
 	if db == nil {
 		return nil, errors.New("db is nil")
@@ -24,7 +24,7 @@ func NewManagementSettingsRepository(db *sql.DB) (*ManagementSettingsRepository,
 	return &ManagementSettingsRepository{db: db}, nil
 }
 
-// SaveSettings upserts single management settings record.
+// SaveSettings сохраняет настройки в БД.
 func (r *ManagementSettingsRepository) SaveSettings(
 	ctx context.Context,
 	settings management.Settings,
@@ -75,7 +75,7 @@ ON CONFLICT(id) DO UPDATE SET
 	return stored, nil
 }
 
-// LoadSettings reads stored management settings.
+// LoadSettings читает настройки хранящиеся в БД.
 func (r *ManagementSettingsRepository) LoadSettings(ctx context.Context) (management.StoredSettings, error) {
 	const loadSQL = `
 SELECT issuer, audience, jwks_url, required_scope, guarded_ports_range, iface, handshake_window_sec, updated_at_unix
@@ -125,7 +125,7 @@ WHERE id = 1;
 	}, nil
 }
 
-// Close releases repository resources.
+// Close высвобождает ресурсы Repository.
 func (r *ManagementSettingsRepository) Close() error {
 	if r == nil || r.db == nil {
 		return nil

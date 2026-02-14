@@ -1,6 +1,6 @@
 package leshybpf
 
-// HostToNetworkPort converts port from host to network byte order.
+// HostToNetworkPort преобразует формат порта HOST -> NETWORK BYTE.
 func HostToNetworkPort(port uint16) uint16 {
 	return hostToNetworkPort(port)
 }

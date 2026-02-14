@@ -55,7 +55,7 @@ func (s *verifierStub) ValidateSettings(ctx context.Context, settings Settings) 
 	return s.validateFn(ctx, settings)
 }
 
-func (s *verifierStub) VerifyAllowToken(ctx context.Context, settings Settings, token string) error {
+func (s *verifierStub) VerifyAccessToken(ctx context.Context, settings Settings, token string) error {
 	s.verifyCalls++
 	if s.verifyFn == nil {
 		return nil

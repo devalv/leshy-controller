@@ -292,7 +292,7 @@ func checkPinnedPaths(pinPath string, mapNames []string) error {
 	return nil
 }
 
-// isBpftoolAvailable checks if the "bpftool" command is present in the system's PATH.
+// isBpftoolAvailable проверяет доступность утилиты "bpftool" для вызова.
 func isBpftoolAvailable() bool {
 	_, err := exec.LookPath("bpftool")
 
