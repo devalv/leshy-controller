@@ -2,10 +2,13 @@ package httpserver
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type Server struct {
@@ -13,9 +16,17 @@ type Server struct {
 	name string
 }
 
-func New(addr string, handler http.Handler) *Server {
+func New(addr string, crtPath string, keyPath string, handler http.Handler) *Server {
 	if handler == nil {
 		handler = DefaultNotFoundHandler()
+	}
+
+	cert, err := tls.LoadX509KeyPair(crtPath, keyPath)
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	if err == nil {
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	} else {
+		log.Error().Err(err).Msg("failed to load tls key pair")
 	}
 
 	return &Server{
@@ -24,6 +35,7 @@ func New(addr string, handler http.Handler) *Server {
 			Addr:              addr,
 			Handler:           handler,
 			ReadHeaderTimeout: 5 * time.Second, //nolint:mnd
+			TLSConfig:         tlsConfig,
 		},
 	}
 }
@@ -40,7 +52,8 @@ func (s *Server) Start(ctx context.Context) error {
 	default:
 	}
 
-	err := s.srv.ListenAndServe()
+	// Путь до сертификатов задается в New
+	err := s.srv.ListenAndServeTLS("", "")
 
 	// http.ErrServerClosed — нормальный выход после Shutdown()
 	if errors.Is(err, http.ErrServerClosed) {

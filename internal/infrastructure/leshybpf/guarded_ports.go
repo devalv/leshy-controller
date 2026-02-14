@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// GetGuardedPorts returns the list of guarded ports in HOST BYTE ORDER.
+// GetGuardedPorts возвращает список защищаемых портов в HOST BYTE ORDER.
 func GetGuardedPorts(m *ebpf.Map) []uint16 {
 	var ports []uint16
 	iter := m.Iterate()
@@ -23,7 +23,7 @@ func GetGuardedPorts(m *ebpf.Map) []uint16 {
 	return ports
 }
 
-// IsPortGuarded checks if a port is in the guarded ports list (uses NETWORK byte order).
+// IsPortGuarded проверяет находится ли порт в списке защищаемых (NETWORK byte order).
 func IsPortGuarded(m *ebpf.Map, port uint16) bool {
 	portNetwork := hostToNetworkPort(port)
 	var value uint8
@@ -56,7 +56,7 @@ func setGuardedPorts(m *ebpf.Map, ports []uint16) error {
 	return nil
 }
 
-// InitializeGuardedPorts initializes guarded ports from port range.
+// InitializeGuardedPorts инициализует защищаемые порты из диапазона.
 func InitializeGuardedPorts(portsRange string, m *ebpf.Map) error {
 	ports, err := parsePortRange(portsRange)
 	if err != nil {
@@ -71,7 +71,7 @@ func InitializeGuardedPorts(portsRange string, m *ebpf.Map) error {
 	return nil
 }
 
-// parsePortRange parses port range in "start-end" format.
+// parsePortRange парсит диапазон портов в формате "start-end".
 func parsePortRange(portsRange string) ([]uint16, error) {
 	parts := strings.Split(portsRange, "-")
 	if len(parts) != 2 { //nolint:mnd

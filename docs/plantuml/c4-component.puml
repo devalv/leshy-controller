@@ -1,0 +1,44 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_LEFT_RIGHT()
+title leshy-controller - C4 Level 3 (Component, Control Plane)
+
+Person_Ext(ext_admin, "External Control Plane", "Calls management and allow APIs")
+Container_Ext(jwks, "JWKS Provider", "HTTPS endpoint", "Ed25519 public keys")
+ContainerDb_Ext(settings_db, "SQLite", "Database", "management_settings")
+Container_Ext(kernel, "Linux Kernel eBPF runtime", "TC/eBPF maps", "pending/guarded/stats/active_flows")
+
+Container_Boundary(rest_boundary, "REST API container (interfaces/rest/v1)") {
+  Component(auth_mw, "Authorization middleware", "withAuthorization()", "Extracts Bearer token and calls AuthorizeAllow")
+  Component(h_settings, "Settings handlers", "POST/PATCH/GET /management/settings", "Maps HTTP DTO to management use case")
+  Component(h_allow, "Allow handler", "POST /allow", "Grants temporary access for ip:port")
+  Component(h_stats, "Stats handler", "GET /stats", "Returns filter counters and rates")
+  Component(h_block, "Block handler", "POST /management/block", "Flushes allow-related runtime state")
+}
+
+Component_Ext(mgmt_svc, "management.Service", "Application", "Settings validation, bootstrap auth, JWT authorization")
+Component_Ext(filter_svc, "filter.Service", "Application", "allow/stats/block orchestration")
+Component_Ext(repo, "sqlite.ManagementSettingsRepository", "Infrastructure", "Raw SQL settings persistence")
+Component_Ext(verifier, "jwtauth.Verifier", "Infrastructure", "Ed25519 JWT verify + JWKS cache")
+Component_Ext(applier, "leshybpf.RuntimeSettingsApplier", "Infrastructure", "Attach and apply runtime settings")
+Component_Ext(backend, "leshybpf.FilterBackend", "Infrastructure", "Map operations for allow/stats/block")
+
+Rel(ext_admin, auth_mw, "Calls protected REST endpoints")
+Rel(auth_mw, mgmt_svc, "AuthorizeAllow(token)")
+Rel(h_settings, mgmt_svc, "SaveSettings, UpdateSettings, GetSettings")
+Rel(h_allow, filter_svc, "Allow(ip, port)")
+Rel(h_stats, filter_svc, "Stats()")
+Rel(h_block, filter_svc, "BlockAll()")
+
+Rel(mgmt_svc, repo, "Load/Save settings")
+Rel(repo, settings_db, "Read/Write")
+Rel(mgmt_svc, verifier, "ValidateSettings, VerifyAccessToken")
+Rel(verifier, jwks, "Fetch key set")
+Rel(mgmt_svc, applier, "Apply(settings), RuntimeStatus()")
+Rel(applier, backend, "Configure filter runtime backend")
+Rel(backend, kernel, "Map operations")
+Rel(filter_svc, backend, "Allow/Stats/Block runtime operations")
+
+SHOW_LEGEND()
+@enduml

@@ -30,3 +30,54 @@ type StatsResponse struct {
 	AllowRatePercent float64 `json:"allow_rate_percent"`
 	DropRatePercent  float64 `json:"drop_rate_percent"`
 }
+
+// UpsertManagementSettingsRequest — JSON-контракт для POST /management/settings запроса.
+type UpsertManagementSettingsRequest struct {
+	Issuer             string `json:"issuer"`
+	Audience           string `json:"audience"`
+	JWKSURL            string `json:"jwks_url"`
+	RequiredScope      string `json:"required_scope"`
+	GuardedPortsRange  string `json:"guarded_ports_range"`
+	Iface              string `json:"iface"`
+	HandshakeWindowSec int    `json:"handshake_window_sec"`
+}
+
+// UpsertManagementSettingsResponse — JSON-контракт для ответа на POST /management/settings запрос.
+type UpsertManagementSettingsResponse struct {
+	Message            string `json:"message"`
+	AuthConfigured     bool   `json:"auth_configured"`
+	RuntimeAttached    bool   `json:"runtime_attached"`
+	RuntimeIface       string `json:"runtime_iface"`
+	Issuer             string `json:"issuer"`
+	Audience           string `json:"audience"`
+	JWKSURL            string `json:"jwks_url"`
+	RequiredScope      string `json:"required_scope"`
+	GuardedPortsRange  string `json:"guarded_ports_range"`
+	Iface              string `json:"iface"`
+	HandshakeWindowSec int    `json:"handshake_window_sec"`
+	UpdatedAt          string `json:"updated_at"` // RFC3339 (UTC)
+}
+
+// GetManagementSettingsResponse — JSON-контракт для ответа на GET /management/settings запрос.
+type GetManagementSettingsResponse struct {
+	AuthConfigured     bool   `json:"auth_configured"`
+	RuntimeAttached    bool   `json:"runtime_attached"`
+	RuntimeIface       string `json:"runtime_iface"`
+	Issuer             string `json:"issuer"`
+	Audience           string `json:"audience"`
+	JWKSURL            string `json:"jwks_url"`
+	RequiredScope      string `json:"required_scope"`
+	GuardedPortsRange  string `json:"guarded_ports_range"`
+	Iface              string `json:"iface"`
+	HandshakeWindowSec int    `json:"handshake_window_sec"`
+	UpdatedAt          string `json:"updated_at"` // RFC3339 (UTC)
+}
+
+// BlockManagementResponse — JSON-контракт для ответа на POST /management/block запрос.
+type BlockManagementResponse struct {
+	Message               string `json:"message"`
+	PendingEntriesRemoved uint64 `json:"pending_entries_removed"`
+	ActiveFlowsRemoved    uint64 `json:"active_flows_removed"`
+	RuntimeAttached       bool   `json:"runtime_attached"`
+	RuntimeIface          string `json:"runtime_iface"`
+}

@@ -2,7 +2,7 @@ package runtime
 
 import "context"
 
-// Server is an interface for a server. Configuration will be injected via constructor of specific Server.
+// Server описывает интерфейс server. Конфигурация внедряется через конструктор конкретного сервера.
 type Server interface {
 	Name() string
 	Start(ctx context.Context) error

@@ -198,7 +198,6 @@ func TestFormatNanoTimestamp_RoundtripArbitraryValues(t *testing.T) {
 		999,
 		1_000_000_000,
 		1770235561740224942, // пример
-		// ...
 	}
 
 	for _, v := range values {

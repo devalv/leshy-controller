@@ -239,67 +239,6 @@ func TestValidateBPFPinPath(t *testing.T) {
 	}
 }
 
-// Tests for validateIface
-
-func TestValidateIface(t *testing.T) {
-	// Get a real interface for testing (usually loopback exists)
-	realInterface := "lo"
-	if _, err := os.Stat("/sys/class/net/lo"); os.IsNotExist(err) {
-		// Try to get any existing interface
-		interfaces, err := os.ReadDir("/sys/class/net")
-		if err == nil && len(interfaces) > 0 {
-			realInterface = interfaces[0].Name()
-		} else {
-			realInterface = "eth0" // fallback
-		}
-	}
-
-	tests := []struct {
-		name        string
-		iface       string
-		wantErr     bool
-		errContains string
-	}{
-		{
-			name:        "empty interface",
-			iface:       "",
-			wantErr:     true,
-			errContains: "cannot be empty",
-		},
-		{
-			name:        "non-existent interface",
-			iface:       "nonexistentinterface123",
-			wantErr:     true,
-			errContains: "interface 'nonexistentinterface123' not found",
-		},
-		{
-			name:    "valid interface (if exists)",
-			iface:   realInterface,
-			wantErr: false,
-			// Note: This test will fail if interface is down
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateIface(tt.iface)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("expected error, got nil")
-				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
-					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
-				}
-			} else {
-				if err != nil && !contains(err.Error(), "is down") {
-					// Allow "interface is down" error for this test
-					t.Errorf("unexpected error: %v", err)
-				}
-			}
-		})
-	}
-}
-
 // Tests for validateAPIListenAddr
 
 func TestValidateAPIListenAddr(t *testing.T) {
@@ -392,214 +331,6 @@ func TestValidateAPIListenAddr(t *testing.T) {
 	}
 }
 
-// Tests for validateGuardedPortsRange
-
-func TestValidateGuardedPortsRange(t *testing.T) {
-	tests := []struct {
-		name        string
-		rangeStr    string
-		wantErr     bool
-		errContains string
-	}{
-		{
-			name:        "empty range",
-			rangeStr:    "",
-			wantErr:     true,
-			errContains: "cannot be empty",
-		},
-		{
-			name:        "contains spaces",
-			rangeStr:    "1024 - 2048",
-			wantErr:     true,
-			errContains: "cannot contain spaces",
-		},
-		{
-			name:        "contains tab",
-			rangeStr:    "1024\t2048",
-			wantErr:     true,
-			errContains: "cannot contain whitespace",
-		},
-		{
-			name:        "missing dash",
-			rangeStr:    "10242048",
-			wantErr:     true,
-			errContains: "expected 'start-end'",
-		},
-		{
-			name:        "multiple dashes",
-			rangeStr:    "1024-2048-4096",
-			wantErr:     true,
-			errContains: "expected 'start-end'",
-		},
-		{
-			name:        "empty start port",
-			rangeStr:    "-2048",
-			wantErr:     true,
-			errContains: "start port cannot be empty",
-		},
-		{
-			name:        "empty end port",
-			rangeStr:    "1024-",
-			wantErr:     true,
-			errContains: "end port cannot be empty",
-		},
-		{
-			name:        "invalid start port",
-			rangeStr:    "abc-2048",
-			wantErr:     true,
-			errContains: "invalid start port",
-		},
-		{
-			name:        "invalid end port",
-			rangeStr:    "1024-xyz",
-			wantErr:     true,
-			errContains: "invalid end port",
-		},
-		{
-			name:        "start port too low",
-			rangeStr:    "1022-2048",
-			wantErr:     true,
-			errContains: "less than minimum allowed 1023",
-		},
-		{
-			name:        "end port too low",
-			rangeStr:    "2048-1022",
-			wantErr:     true,
-			errContains: "less than minimum allowed 1023",
-		},
-		{
-			name:        "start port too high",
-			rangeStr:    "65536-66000",
-			wantErr:     true,
-			errContains: "exceeds maximum 65535",
-		},
-		{
-			name:        "end port too high",
-			rangeStr:    "60000-65536",
-			wantErr:     true,
-			errContains: "exceeds maximum 65535",
-		},
-		{
-			name:        "start > end",
-			rangeStr:    "5000-4000",
-			wantErr:     true,
-			errContains: "greater than end port",
-		},
-		{
-			name:     "valid range single port",
-			rangeStr: "1023-1023",
-			wantErr:  false,
-		},
-		{
-			name:     "valid range multiple ports",
-			rangeStr: "1024-2048",
-			wantErr:  false,
-		},
-		{
-			name:     "valid range max ports",
-			rangeStr: "65533-65535",
-			wantErr:  false,
-		},
-		{
-			name:     "valid range min to max",
-			rangeStr: "1023-65535",
-			wantErr:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateGuardedPortsRange(tt.rangeStr)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("expected error, got nil")
-				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
-					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-			}
-		})
-	}
-}
-
-// Tests for validateHandshakeWindowSecs
-
-func TestValidateHandshakeWindowSecs(t *testing.T) {
-	tests := []struct {
-		name        string
-		secs        int
-		wantErr     bool
-		errContains string
-	}{
-		{
-			name:        "zero seconds",
-			secs:        0,
-			wantErr:     true,
-			errContains: "must be at least 1",
-		},
-		{
-			name:        "negative seconds",
-			secs:        -1,
-			wantErr:     true,
-			errContains: "must be at least 1",
-		},
-		{
-			name:    "minimum valid (1 second)",
-			secs:    1,
-			wantErr: false,
-		},
-		{
-			name:    "valid seconds",
-			secs:    30,
-			wantErr: false,
-		},
-		{
-			name:    "one hour",
-			secs:    3600,
-			wantErr: false,
-		},
-		{
-			name:    "exactly 3 hours",
-			secs:    10800,
-			wantErr: false,
-		},
-		{
-			name:        "more than 3 hours",
-			secs:        10801,
-			wantErr:     true,
-			errContains: "cannot exceed 10800 seconds",
-		},
-		{
-			name:        "much more than 3 hours",
-			secs:        86400, // 24 hours
-			wantErr:     true,
-			errContains: "cannot exceed 10800 seconds",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateHandshakeWindowSecs(tt.secs)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("expected error, got nil")
-				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
-					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-			}
-		})
-	}
-}
-
 // Tests for Config.Validate
 
 func TestConfigValidate(t *testing.T) {
@@ -612,8 +343,23 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Get a real interface
-	realInterface := "lo"
+	validSettingsDB := filepath.Join(tmpDir, "settings.db")
+	err = os.WriteFile(validSettingsDB, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	validCertFile := filepath.Join(tmpDir, "server.crt")
+	err = os.WriteFile(validCertFile, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	validKeyFile := filepath.Join(tmpDir, "server.key")
+	err = os.WriteFile(validKeyFile, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	tests := []struct {
 		name     string
@@ -624,68 +370,40 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "valid config",
 			config: Config{
-				BPFProgramPath:      validBPF,
-				BPFPinPath:          tmpDir,
-				Iface:               realInterface,
-				APIListenAddr:       "127.0.0.1:9090",
-				GuardedPortsRange:   "1024-2048",
-				HandshakeWindowSecs: 30,
-				ShutdownTimeout:     5,
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				SettingsDBPath:     validSettingsDB,
+				APIListenAddr:      "127.0.0.1:9090",
+				ShutdownTimeoutSec: 5,
+				CrtPath:            validCertFile,
+				KeyPath:            validKeyFile,
 			},
 			wantErr: false,
 		},
 		{
 			name: "multiple errors",
 			config: Config{
-				BPFProgramPath:      "",
-				BPFPinPath:          "",
-				Iface:               "",
-				APIListenAddr:       "invalid",
-				GuardedPortsRange:   "invalid",
-				HandshakeWindowSecs: 0,
-				ShutdownTimeout:     0,
+				BPFProgramPath:     "",
+				BPFPinPath:         "",
+				APIListenAddr:      "invalid",
+				ShutdownTimeoutSec: 0,
+				SettingsDBPath:     "",
+				CrtPath:            "",
+				KeyPath:            "",
 			},
 			wantErr:  true,
-			errCount: 7, // all fields invalid
+			errCount: 7, // all validated fields invalid
 		},
 		{
 			name: "invalid BPF path only",
 			config: Config{
-				BPFProgramPath:      "",
-				BPFPinPath:          tmpDir,
-				Iface:               realInterface,
-				APIListenAddr:       "127.0.0.1:9090",
-				GuardedPortsRange:   "1024-2048",
-				HandshakeWindowSecs: 30,
-				ShutdownTimeout:     5,
-			},
-			wantErr:  true,
-			errCount: 1,
-		},
-		{
-			name: "invalid port range only",
-			config: Config{
-				BPFProgramPath:      validBPF,
-				BPFPinPath:          tmpDir,
-				Iface:               realInterface,
-				APIListenAddr:       "127.0.0.1:9090",
-				GuardedPortsRange:   "100-200", // invalid (starts at 100 < 1023)
-				HandshakeWindowSecs: 30,
-				ShutdownTimeout:     5,
-			},
-			wantErr:  true,
-			errCount: 1,
-		},
-		{
-			name: "invalid handshake window",
-			config: Config{
-				BPFProgramPath:      validBPF,
-				BPFPinPath:          tmpDir,
-				Iface:               realInterface,
-				APIListenAddr:       "127.0.0.1:9090",
-				GuardedPortsRange:   "1024-2048",
-				HandshakeWindowSecs: 10801, // > 3 hours
-				ShutdownTimeout:     5,
+				BPFProgramPath:     "",
+				BPFPinPath:         tmpDir,
+				APIListenAddr:      "127.0.0.1:9090",
+				ShutdownTimeoutSec: 5,
+				SettingsDBPath:     validSettingsDB,
+				CrtPath:            validCertFile,
+				KeyPath:            validKeyFile,
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -693,14 +411,55 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "invalid shutdown timeout",
 			config: Config{
-				BPFProgramPath:      validBPF,
-				BPFPinPath:          tmpDir,
-				Iface:               realInterface,
-				APIListenAddr:       "127.0.0.1:9090",
-				GuardedPortsRange:   "1024-2048",
-				HandshakeWindowSecs: 30,
-				ShutdownTimeout:     61, // > 61 secs
-
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				APIListenAddr:      "127.0.0.1:9090",
+				ShutdownTimeoutSec: 61, // > 61 secs
+				SettingsDBPath:     validSettingsDB,
+				CrtPath:            validCertFile,
+				KeyPath:            validKeyFile,
+			},
+			wantErr:  true,
+			errCount: 1,
+		},
+		{
+			name: "invalid settings DB path only",
+			config: Config{
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				APIListenAddr:      "127.0.0.1:9090",
+				ShutdownTimeoutSec: 5,
+				SettingsDBPath:     "", // bad path
+				CrtPath:            validCertFile,
+				KeyPath:            validKeyFile,
+			},
+			wantErr:  true,
+			errCount: 1,
+		},
+		{
+			name: "invalid cert file path only",
+			config: Config{
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				APIListenAddr:      "127.0.0.1:9090",
+				ShutdownTimeoutSec: 5,
+				SettingsDBPath:     validSettingsDB,
+				CrtPath:            "",
+				KeyPath:            validKeyFile,
+			},
+			wantErr:  true,
+			errCount: 1,
+		},
+		{
+			name: "invalid key file path only",
+			config: Config{
+				BPFProgramPath:     validBPF,
+				BPFPinPath:         tmpDir,
+				APIListenAddr:      "127.0.0.1:9090",
+				ShutdownTimeoutSec: 5,
+				SettingsDBPath:     validSettingsDB,
+				CrtPath:            validCertFile,
+				KeyPath:            "",
 			},
 			wantErr:  true,
 			errCount: 1,
@@ -727,10 +486,7 @@ func TestConfigValidate(t *testing.T) {
 				}
 			} else {
 				if err != nil {
-					// Check if error is just about interface being down
-					if !contains(err.Error(), "is down") {
-						t.Errorf("unexpected error: %v", err)
-					}
+					t.Errorf("unexpected error: %v", err)
 				}
 			}
 		})
@@ -919,11 +675,11 @@ func TestNewConfig(t *testing.T) {
 debug: true
 bpf_program_path: ./l4_filter.o
 bpf_pin_path: /sys/fs/bpf/
-iface: lo
 api_listen_addr: 127.0.0.1:9090
-guarded_ports_range: 1024-2048
-handshake_window_secs: 30
-shutdown_timeout: 5
+shutdown_timeout_sec: 5
+db_path: ./leshy-db.db
+crt_path: ./server.crt
+key_path: ./server.key
 `
 
 	// Create temp directory and file structure
@@ -950,16 +706,37 @@ shutdown_timeout: 5
 		t.Fatal(err)
 	}
 
+	// Create DB settings file
+	dbFile := filepath.Join(tmpDir, "leshy-db.db")
+	err = os.WriteFile(dbFile, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create cert file
+	certFile := filepath.Join(tmpDir, "server.crt")
+	err = os.WriteFile(certFile, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create key file
+	keyFile := filepath.Join(tmpDir, "server.key")
+	err = os.WriteFile(keyFile, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Update config content with actual paths
 	configContent = `
 debug: true
 bpf_program_path: ` + bpfFile + `
 bpf_pin_path: ` + bpfPinDir + `
-iface: lo
 api_listen_addr: 127.0.0.1:9090
-guarded_ports_range: 1024-2048
-handshake_window_secs: 30
-shutdown_timeout: 5
+shutdown_timeout_sec: 5
+db_path: ` + dbFile + `
+crt_path: ` + certFile + `
+key_path: ` + keyFile + `
 `
 
 	err = os.WriteFile(configFile, []byte(configContent), 0o644)
@@ -990,12 +767,191 @@ shutdown_timeout: 5
 	if cfg.ConfigPath != configFile {
 		t.Errorf("ConfigPath = %s, want %s", cfg.ConfigPath, configFile)
 	}
-	if cfg.ShutdownTimeout != 5 {
-		t.Errorf("ShutdownTimeout = %d, want %d", cfg.ShutdownTimeout, 5)
+	if cfg.ShutdownTimeoutSec != 5 {
+		t.Errorf("ShutdownTimeoutSec = %d, want %d", cfg.ShutdownTimeoutSec, 5)
 	}
 }
 
 // Helper function to check if string contains substring
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
+}
+
+// Tests for validateDBSettignsPath
+
+func TestValidateSettingsDBPath(t *testing.T) {
+	tmpDir := createTempDir(t)
+	defer os.RemoveAll(tmpDir)
+
+	validSettingsDB := filepath.Join(tmpDir, "leshy-controller.db")
+	err := os.WriteFile(validSettingsDB, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		path        string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:        "empty path",
+			path:        "",
+			wantErr:     true,
+			errContains: "settings DB path cannot be empty",
+		},
+		{
+			name:    "valid settings DB program",
+			path:    validSettingsDB,
+			wantErr: false,
+		},
+		{
+			name:    "non-existent file is allowed",
+			path:    filepath.Join(tmpDir, "new-settings.db"),
+			wantErr: false,
+		},
+		{
+			name:        "directory instead of file",
+			path:        tmpDir,
+			wantErr:     true,
+			errContains: "is a directory, not a file",
+		},
+		{
+			name:        "parent path is a file",
+			path:        filepath.Join(validSettingsDB, "child.db"),
+			wantErr:     true,
+			errContains: "not a directory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSettingsDBPath(tt.path)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// Tests for validateCertPath
+
+func TestValidateCertPath(t *testing.T) {
+	tmpDir := createTempDir(t)
+	defer os.RemoveAll(tmpDir)
+
+	validCert := filepath.Join(tmpDir, "server.crt")
+	err := os.WriteFile(validCert, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		path        string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:        "empty path",
+			path:        "",
+			wantErr:     true,
+			errContains: "CrtPath cannot be empty",
+		},
+		{
+			name:    "valid cert path",
+			path:    validCert,
+			wantErr: false,
+		},
+		{
+			name:        "directory instead of file",
+			path:        tmpDir,
+			wantErr:     true,
+			errContains: "is a directory, not a file",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateCrtPath(tt.path)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// Tests for validateKeyPath
+
+func TestValidateKeyPath(t *testing.T) {
+	tmpDir := createTempDir(t)
+	defer os.RemoveAll(tmpDir)
+
+	validKey := filepath.Join(tmpDir, "server.key")
+	err := os.WriteFile(validKey, []byte("test"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		path        string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:        "empty path",
+			path:        "",
+			wantErr:     true,
+			errContains: "KeyPath cannot be empty",
+		},
+		{
+			name:    "valid key path",
+			path:    validKey,
+			wantErr: false,
+		},
+		{
+			name:        "directory instead of file",
+			path:        tmpDir,
+			wantErr:     true,
+			errContains: "is a directory, not a file",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateKeyPath(tt.path)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
 }

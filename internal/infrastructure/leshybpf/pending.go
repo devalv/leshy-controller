@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// InsertPendingSrcPort inserts an IP+port into the pending map with expiration.
+// InsertPendingSrcPort вставляет ключи IP+port в  pending map с заданным expiration.
 func InsertPendingSrcPort(m *ebpf.Map, ip net.IP, port uint16, window time.Duration) error {
 	key, err := pendingKeyPendingSrc(ip, port)
 	if err != nil {

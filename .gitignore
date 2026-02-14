@@ -37,6 +37,7 @@ config.yml
 *.key
 ./certs
 *.log
+*.db
 
 # Build artifacts
 l4_filter.o
