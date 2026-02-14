@@ -16,8 +16,10 @@ import (
 
 type filterUseCaseStub struct {
 	allowCalls int
+	statsCalls int
 	blockCalls int
 	allowFn    func(ctx context.Context, ip net.IP, port uint16) (time.Time, error)
+	statsFn    func(ctx context.Context) (filter.Stats, error)
 	blockFn    func(ctx context.Context) (filter.FlushResult, error)
 }
 
@@ -30,8 +32,13 @@ func (s *filterUseCaseStub) Allow(ctx context.Context, ip net.IP, port uint16) (
 	return s.allowFn(ctx, ip, port)
 }
 
-func (s *filterUseCaseStub) Stats(context.Context) (filter.Stats, error) {
-	return filter.Stats{}, nil
+func (s *filterUseCaseStub) Stats(ctx context.Context) (filter.Stats, error) {
+	s.statsCalls++
+	if s.statsFn == nil {
+		return filter.Stats{}, nil
+	}
+
+	return s.statsFn(ctx)
 }
 
 func (s *filterUseCaseStub) BlockAll(ctx context.Context) (filter.FlushResult, error) {
@@ -230,5 +237,167 @@ func TestAllowEndpointMethodNotAllowedSkipsAuthorization(t *testing.T) {
 	}
 	if managementStub.authorizeCalls != 0 {
 		t.Fatalf("authorize calls = %d, want 0", managementStub.authorizeCalls)
+	}
+}
+
+func TestStatsEndpointAuthorization(t *testing.T) {
+	t.Parallel()
+
+	internalErr := errors.New("unexpected verifier error")
+
+	tests := []struct {
+		name               string
+		method             string
+		authHeader         string
+		authorizeErr       error
+		statsErr           error
+		wantStatus         int
+		wantBodyContains   string
+		wantAuthorizeCalls int
+		wantStatsCalls     int
+	}{
+		{
+			name:               "method not allowed skips authorization",
+			method:             http.MethodPost,
+			wantStatus:         http.StatusMethodNotAllowed,
+			wantBodyContains:   "Method not allowed",
+			wantAuthorizeCalls: 0,
+			wantStatsCalls:     0,
+		},
+		{
+			name:               "missing auth header",
+			method:             http.MethodGet,
+			wantStatus:         http.StatusUnauthorized,
+			wantBodyContains:   "Unauthorized",
+			wantAuthorizeCalls: 0,
+			wantStatsCalls:     0,
+		},
+		{
+			name:               "invalid auth scheme",
+			method:             http.MethodGet,
+			authHeader:         "Basic abc",
+			wantStatus:         http.StatusUnauthorized,
+			wantBodyContains:   "Unauthorized",
+			wantAuthorizeCalls: 0,
+			wantStatsCalls:     0,
+		},
+		{
+			name:               "invalid access token",
+			method:             http.MethodGet,
+			authHeader:         "Bearer bad-token",
+			authorizeErr:       management.ErrInvalidAccessToken,
+			wantStatus:         http.StatusUnauthorized,
+			wantBodyContains:   "Unauthorized",
+			wantAuthorizeCalls: 1,
+			wantStatsCalls:     0,
+		},
+		{
+			name:               "settings are not configured",
+			method:             http.MethodGet,
+			authHeader:         "Bearer token",
+			authorizeErr:       management.ErrSettingsNotFound,
+			wantStatus:         http.StatusServiceUnavailable,
+			wantBodyContains:   "Authorization is unavailable",
+			wantAuthorizeCalls: 1,
+			wantStatsCalls:     0,
+		},
+		{
+			name:               "authorization backend unavailable",
+			method:             http.MethodGet,
+			authHeader:         "Bearer token",
+			authorizeErr:       management.ErrAuthorizationUnavailable,
+			wantStatus:         http.StatusServiceUnavailable,
+			wantBodyContains:   "Authorization is unavailable",
+			wantAuthorizeCalls: 1,
+			wantStatsCalls:     0,
+		},
+		{
+			name:               "authorization failure is internal error",
+			method:             http.MethodGet,
+			authHeader:         "Bearer token",
+			authorizeErr:       internalErr,
+			wantStatus:         http.StatusInternalServerError,
+			wantBodyContains:   "stats authorization failed",
+			wantAuthorizeCalls: 1,
+			wantStatsCalls:     0,
+		},
+		{
+			name:               "filter not configured",
+			method:             http.MethodGet,
+			authHeader:         "Bearer token",
+			statsErr:           filter.ErrNotConfigured,
+			wantStatus:         http.StatusServiceUnavailable,
+			wantBodyContains:   "filter is not configured",
+			wantAuthorizeCalls: 1,
+			wantStatsCalls:     1,
+		},
+		{
+			name:               "authorized request",
+			method:             http.MethodGet,
+			authHeader:         "Bearer token",
+			wantStatus:         http.StatusOK,
+			wantBodyContains:   `"allowed":7`,
+			wantAuthorizeCalls: 1,
+			wantStatsCalls:     1,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			filterStub := &filterUseCaseStub{
+				statsFn: func(context.Context) (filter.Stats, error) {
+					if tt.statsErr != nil {
+						return filter.Stats{}, tt.statsErr
+					}
+
+					return filter.Stats{
+						Counters: filter.Counters{
+							Allowed: 7,
+							Dropped: 2,
+						},
+						AllowRatePercent: 77.7,
+						DropRatePercent:  22.3,
+					}, nil
+				},
+			}
+			managementStub := &managementUseCaseStub{
+				authorizeFn: func(context.Context, string) error {
+					if tt.authorizeErr != nil {
+						return tt.authorizeErr
+					}
+
+					return nil
+				},
+			}
+
+			mux := http.NewServeMux()
+			Register(mux, Deps{
+				Filter:     filterStub,
+				Management: managementStub,
+			})
+
+			request := httptest.NewRequest(tt.method, "/stats", nil)
+			if tt.authHeader != "" {
+				request.Header.Set("Authorization", tt.authHeader)
+			}
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, request)
+
+			if response.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, tt.wantStatus)
+			}
+			if !strings.Contains(response.Body.String(), tt.wantBodyContains) {
+				t.Fatalf("body = %q, expected substring %q", response.Body.String(), tt.wantBodyContains)
+			}
+			if managementStub.authorizeCalls != tt.wantAuthorizeCalls {
+				t.Fatalf("authorize calls = %d, want %d", managementStub.authorizeCalls, tt.wantAuthorizeCalls)
+			}
+			if filterStub.statsCalls != tt.wantStatsCalls {
+				t.Fatalf("stats calls = %d, want %d", filterStub.statsCalls, tt.wantStatsCalls)
+			}
+		})
 	}
 }

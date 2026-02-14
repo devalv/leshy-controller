@@ -307,7 +307,7 @@ curl -X POST "http://<host>:9090/api/v1/management/block" \
    - `GET /api/v1/stats` вернет `503 filter is not configured`
    - `GET /api/healthz` вернет JSON с `runtime_attached: false`
 7. Runtime-статус дублируется в:
-   - `GET /api/healthz` (`runtime_attached`, `runtime_iface`)
+   - `GET /api/healthz` (`runtime_attached`)
    - `GET /api/v1/management/settings`
    - `POST /api/v1/management/settings`
    - `PATCH /api/v1/management/settings`

@@ -141,7 +141,6 @@ func makeHealthHandler(managementUseCase management.UseCase) http.Handler {
 	type healthResponse struct {
 		Status          string `json:"status"`
 		RuntimeAttached bool   `json:"runtime_attached"`
-		RuntimeIface    string `json:"runtime_iface"`
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +152,6 @@ func makeHealthHandler(managementUseCase management.UseCase) http.Handler {
 		response := healthResponse{
 			Status:          "ok",
 			RuntimeAttached: runtimeStatus.Attached,
-			RuntimeIface:    runtimeStatus.Iface,
 		}
 
 		payload, err := json.Marshal(response)

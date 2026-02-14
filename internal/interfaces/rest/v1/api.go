@@ -23,7 +23,7 @@ type Deps struct {
 const settingsBootstrapHeader = "X-Bootstrap-Token"
 
 func Register(mux *http.ServeMux, d Deps) {
-	allowHandler := withAllowAuthorization(d.Management, allowAuthorizationOptions{
+	allowHandler := withAuthorization(d.Management, allowAuthorizationOptions{
 		Method:                         http.MethodPost,
 		Operation:                      "allow",
 		SettingsNotFoundStatus:         http.StatusServiceUnavailable,
@@ -32,7 +32,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		AuthorizationUnavailableBody:   "Authorization is unavailable",
 		AuthorizationFailureBody:       "allow authorization failed",
 	}, makeAllowHandler(d.Filter))
-	managementBlockHandler := withAllowAuthorization(d.Management, allowAuthorizationOptions{
+	managementBlockHandler := withAuthorization(d.Management, allowAuthorizationOptions{
 		Method:                         http.MethodPost,
 		Operation:                      "management_block",
 		SettingsNotFoundStatus:         http.StatusConflict,
@@ -41,11 +41,19 @@ func Register(mux *http.ServeMux, d Deps) {
 		AuthorizationUnavailableBody:   "Authorization is unavailable",
 		AuthorizationFailureBody:       "management block authorization failed",
 	}, makeManagementBlockHandler(d.Filter, d.Management))
+	statsHandler := withAuthorization(d.Management, allowAuthorizationOptions{
+		Method:                       http.MethodGet,
+		Operation:                    "stats",
+		SettingsNotFoundStatus:       http.StatusServiceUnavailable,
+		SettingsNotFoundMessage:      "Authorization is unavailable",
+		AuthorizationUnavailableBody: "Authorization is unavailable",
+		AuthorizationFailureBody:     "stats authorization failed",
+	}, makeStatsHandler(d.Filter))
 
-	mux.HandleFunc("/stats", makeStatsHandler(d.Filter))
-	mux.Handle("/allow", allowHandler)
 	mux.HandleFunc("/management/settings", makeManagementSettingsHandler(d.Management))
 	mux.Handle("/management/block", managementBlockHandler)
+	mux.Handle("/allow", allowHandler)
+	mux.Handle("/stats", statsHandler)
 }
 
 // --- handlers ---
@@ -161,7 +169,7 @@ func makeAllowHandler(filterUseCase filter.UseCase) http.HandlerFunc {
 }
 
 func makeManagementSettingsHandler(managementUseCase management.UseCase) http.HandlerFunc {
-	patchHandler := withAllowAuthorization(managementUseCase, allowAuthorizationOptions{
+	patchHandler := withAuthorization(managementUseCase, allowAuthorizationOptions{
 		Method:                         http.MethodPatch,
 		Operation:                      "management_settings_update",
 		SettingsNotFoundStatus:         http.StatusConflict,
@@ -172,6 +180,17 @@ func makeManagementSettingsHandler(managementUseCase management.UseCase) http.Ha
 	}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleManagementSettingsPatch(w, r, managementUseCase)
 	}))
+	getHandler := withAuthorization(managementUseCase, allowAuthorizationOptions{
+		Method:                         http.MethodGet,
+		Operation:                      "management_settings_show",
+		SettingsNotFoundStatus:         http.StatusConflict,
+		SettingsNotFoundMessage:        "management settings are not configured",
+		AuthorizationUnavailableStatus: http.StatusServiceUnavailable,
+		AuthorizationUnavailableBody:   "Authorization is unavailable",
+		AuthorizationFailureBody:       "management settings authorization failed",
+	}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleManagementSettingsGet(w, r, managementUseCase)
+	}))
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -180,7 +199,7 @@ func makeManagementSettingsHandler(managementUseCase management.UseCase) http.Ha
 		case http.MethodPatch:
 			patchHandler.ServeHTTP(w, r)
 		case http.MethodGet:
-			handleManagementSettingsGet(w, r, managementUseCase)
+			getHandler.ServeHTTP(w, r)
 		default:
 			methodNotAllowed(w, []string{http.MethodGet, http.MethodPost, http.MethodPatch})
 		}
@@ -541,7 +560,7 @@ func decodeManagementSettingsJSON(r *http.Request) (restv1.UpsertManagementSetti
 		return req, errors.New("handshake_window_sec is required")
 	}
 
-	// TODO: extra validation for incoming Settings
+	// Смысловая валидация значений выполняется при записи настроек ((s *Service) SaveSettings)
 	return req, nil
 }
 
@@ -623,7 +642,7 @@ type allowAuthorizationOptions struct {
 	AuthorizationFailureBody       string
 }
 
-func withAllowAuthorization(
+func withAuthorization(
 	managementUseCase management.UseCase,
 	options allowAuthorizationOptions,
 	next http.Handler,

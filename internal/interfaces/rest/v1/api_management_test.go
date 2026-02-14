@@ -723,27 +723,91 @@ func TestManagementSettingsGetEndpoint(t *testing.T) {
 	internalErr := errors.New("db failed")
 
 	tests := []struct {
-		name             string
-		getErr           error
-		wantStatus       int
-		wantBodyContains string
+		name               string
+		authHeader         string
+		authorizeErr       error
+		getErr             error
+		wantStatus         int
+		wantBodyContains   string
+		wantAuthorizeCalls int
+		wantGetCalls       int
 	}{
 		{
-			name:             "not found",
-			getErr:           management.ErrSettingsNotFound,
-			wantStatus:       http.StatusNotFound,
-			wantBodyContains: "management settings not found",
+			name:               "missing authorization header",
+			wantStatus:         http.StatusUnauthorized,
+			wantBodyContains:   "Unauthorized",
+			wantAuthorizeCalls: 0,
+			wantGetCalls:       0,
 		},
 		{
-			name:             "internal error",
-			getErr:           internalErr,
-			wantStatus:       http.StatusInternalServerError,
-			wantBodyContains: "failed to get management settings",
+			name:               "invalid authorization scheme",
+			authHeader:         "Basic abc",
+			wantStatus:         http.StatusUnauthorized,
+			wantBodyContains:   "Unauthorized",
+			wantAuthorizeCalls: 0,
+			wantGetCalls:       0,
 		},
 		{
-			name:             "success",
-			wantStatus:       http.StatusOK,
-			wantBodyContains: `"runtime_attached":true`,
+			name:               "invalid access token",
+			authHeader:         "Bearer bad-token",
+			authorizeErr:       management.ErrInvalidAccessToken,
+			wantStatus:         http.StatusUnauthorized,
+			wantBodyContains:   "Unauthorized",
+			wantAuthorizeCalls: 1,
+			wantGetCalls:       0,
+		},
+		{
+			name:               "settings are not configured",
+			authHeader:         "Bearer token",
+			authorizeErr:       management.ErrSettingsNotFound,
+			wantStatus:         http.StatusConflict,
+			wantBodyContains:   "management settings are not configured",
+			wantAuthorizeCalls: 1,
+			wantGetCalls:       0,
+		},
+		{
+			name:               "authorization unavailable",
+			authHeader:         "Bearer token",
+			authorizeErr:       management.ErrAuthorizationUnavailable,
+			wantStatus:         http.StatusServiceUnavailable,
+			wantBodyContains:   "Authorization is unavailable",
+			wantAuthorizeCalls: 1,
+			wantGetCalls:       0,
+		},
+		{
+			name:               "authorization failure",
+			authHeader:         "Bearer token",
+			authorizeErr:       errors.New("verifier failed"),
+			wantStatus:         http.StatusInternalServerError,
+			wantBodyContains:   "management settings authorization failed",
+			wantAuthorizeCalls: 1,
+			wantGetCalls:       0,
+		},
+		{
+			name:               "not found",
+			authHeader:         "Bearer token",
+			getErr:             management.ErrSettingsNotFound,
+			wantStatus:         http.StatusNotFound,
+			wantBodyContains:   "management settings not found",
+			wantAuthorizeCalls: 1,
+			wantGetCalls:       1,
+		},
+		{
+			name:               "internal error",
+			authHeader:         "Bearer token",
+			getErr:             internalErr,
+			wantStatus:         http.StatusInternalServerError,
+			wantBodyContains:   "failed to get management settings",
+			wantAuthorizeCalls: 1,
+			wantGetCalls:       1,
+		},
+		{
+			name:               "success",
+			authHeader:         "Bearer token",
+			wantStatus:         http.StatusOK,
+			wantBodyContains:   `"runtime_attached":true`,
+			wantAuthorizeCalls: 1,
+			wantGetCalls:       1,
 		},
 	}
 
@@ -753,6 +817,13 @@ func TestManagementSettingsGetEndpoint(t *testing.T) {
 			t.Parallel()
 
 			stub := &managementUseCaseStub{
+				authorizeFn: func(context.Context, string) error {
+					if tt.authorizeErr != nil {
+						return tt.authorizeErr
+					}
+
+					return nil
+				},
 				getFn: func(context.Context) (management.StoredSettings, error) {
 					if tt.getErr != nil {
 						return management.StoredSettings{}, tt.getErr
@@ -783,6 +854,9 @@ func TestManagementSettingsGetEndpoint(t *testing.T) {
 			})
 
 			request := httptest.NewRequest(http.MethodGet, "/management/settings", nil)
+			if tt.authHeader != "" {
+				request.Header.Set("Authorization", tt.authHeader)
+			}
 			response := httptest.NewRecorder()
 			mux.ServeHTTP(response, request)
 
@@ -798,8 +872,12 @@ func TestManagementSettingsGetEndpoint(t *testing.T) {
 				t.Fatalf("body should not expose token: %q", response.Body.String())
 			}
 
-			if stub.getCalls != 1 {
-				t.Fatalf("get calls = %d, want 1", stub.getCalls)
+			if stub.authorizeCalls != tt.wantAuthorizeCalls {
+				t.Fatalf("authorize calls = %d, want %d", stub.authorizeCalls, tt.wantAuthorizeCalls)
+			}
+
+			if stub.getCalls != tt.wantGetCalls {
+				t.Fatalf("get calls = %d, want %d", stub.getCalls, tt.wantGetCalls)
 			}
 		})
 	}
