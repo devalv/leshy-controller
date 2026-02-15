@@ -78,7 +78,8 @@ curl -X POST "http://<host>:9090/api/v1/management/settings" \
     "required_scope": "allow:write",
     "guarded_ports_range": "3389-3390",
     "iface": "ens18",
-    "handshake_window_sec": 600
+    "handshake_window_sec": 600,
+    "inactive_timer_sec": 300
   }'
 ```
 Пример успешного ответа:
@@ -95,11 +96,16 @@ curl -X POST "http://<host>:9090/api/v1/management/settings" \
   "guarded_ports_range": "3389-3390",
   "iface": "ens18",
   "handshake_window_sec": 600,
+  "inactive_timer_sec": 300,
   "updated_at": "2026-02-11T12:00:00Z"
 }
 ```
 
 Успешный http-запрос в ответе получит статус 200.
+
+Пояснение по runtime-параметрам:
+- `handshake_window_sec` — окно действия временной авторизации из `/allow` (pending).
+- `inactive_timer_sec` — TTL неактивности для `active_flows`; при трафике по активному flow TTL продлевается.
 
 ## 4. Вызов `/allow` из внешней системы
 
@@ -126,7 +132,8 @@ curl -X PATCH "http://<host>:9090/api/v1/management/settings" \
     "required_scope": "allow:write",
     "guarded_ports_range": "3389-3395",
     "iface": "ens18",
-    "handshake_window_sec": 900
+    "handshake_window_sec": 900,
+    "inactive_timer_sec": 300
   }'
 ```
 Примечание: сейчас `PATCH` ожидает полный объект settings (не partial update).

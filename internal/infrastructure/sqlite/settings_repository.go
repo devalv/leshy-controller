@@ -39,9 +39,10 @@ INSERT INTO management_settings (
 	guarded_ports_range,
 	iface,
 	handshake_window_sec,
+	inactive_timer_sec,
 	updated_at_unix
 )
-VALUES (1, ?, ?, ?, ?, ?, ?, ?, CAST(strftime('%s', 'now') AS INTEGER))
+VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, CAST(strftime('%s', 'now') AS INTEGER))
 ON CONFLICT(id) DO UPDATE SET
 	issuer = excluded.issuer,
 	audience = excluded.audience,
@@ -50,6 +51,7 @@ ON CONFLICT(id) DO UPDATE SET
 	guarded_ports_range = excluded.guarded_ports_range,
 	iface = excluded.iface,
 	handshake_window_sec = excluded.handshake_window_sec,
+	inactive_timer_sec = excluded.inactive_timer_sec,
 	updated_at_unix = CAST(strftime('%s', 'now') AS INTEGER);
 `
 
@@ -63,6 +65,7 @@ ON CONFLICT(id) DO UPDATE SET
 		settings.GuardedPortsRange,
 		settings.Iface,
 		settings.HandshakeWindowSec,
+		settings.InactiveTimerSec,
 	); err != nil {
 		return management.StoredSettings{}, fmt.Errorf("upsert management settings: %w", err)
 	}
@@ -78,7 +81,9 @@ ON CONFLICT(id) DO UPDATE SET
 // LoadSettings читает настройки хранящиеся в БД.
 func (r *ManagementSettingsRepository) LoadSettings(ctx context.Context) (management.StoredSettings, error) {
 	const loadSQL = `
-SELECT issuer, audience, jwks_url, required_scope, guarded_ports_range, iface, handshake_window_sec, updated_at_unix
+SELECT
+	issuer, audience, jwks_url, required_scope, guarded_ports_range, iface,
+	handshake_window_sec, inactive_timer_sec, updated_at_unix
 FROM management_settings
 WHERE id = 1;
 `
@@ -91,6 +96,7 @@ WHERE id = 1;
 		guardedPortsRange  string
 		iface              string
 		handshakeWindowSec int
+		inactiveTimerSec   int
 		updatedAtUnix      int64
 	)
 
@@ -102,6 +108,7 @@ WHERE id = 1;
 		&guardedPortsRange,
 		&iface,
 		&handshakeWindowSec,
+		&inactiveTimerSec,
 		&updatedAtUnix,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -120,6 +127,7 @@ WHERE id = 1;
 			GuardedPortsRange:  guardedPortsRange,
 			Iface:              iface,
 			HandshakeWindowSec: handshakeWindowSec,
+			InactiveTimerSec:   inactiveTimerSec,
 		},
 		UpdatedAt: time.Unix(updatedAtUnix, 0).UTC(),
 	}, nil

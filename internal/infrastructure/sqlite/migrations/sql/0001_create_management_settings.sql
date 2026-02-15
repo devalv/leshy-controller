@@ -7,5 +7,6 @@ CREATE TABLE IF NOT EXISTS management_settings (
     guarded_ports_range TEXT NOT NULL,
     iface TEXT NOT NULL,
     handshake_window_sec INTEGER NOT NULL,
+    inactive_timer_sec INTEGER NOT NULL,
     updated_at_unix INTEGER NOT NULL
 );

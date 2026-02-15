@@ -77,7 +77,10 @@ func TestFormatNanoTimestamp_TooLargeReturnsFailureMarker(t *testing.T) {
 func TestGetExpiryUint64_PositiveWindowIsInFuture(t *testing.T) {
 	t.Parallel()
 
-	now := uint64(time.Now().UnixNano())
+	now := getMonotonicNanoUint64()
+	if now == 0 {
+		t.Skip("CLOCK_MONOTONIC is unavailable in this environment")
+	}
 	window := 250 * time.Millisecond
 
 	exp := getExpiryUint64(window)
@@ -100,9 +103,15 @@ func TestGetExpiryUint64_PositiveWindowIsInFuture(t *testing.T) {
 func TestGetExpiryUint64_ZeroWindowIsApproximatelyNow(t *testing.T) {
 	t.Parallel()
 
-	before := uint64(time.Now().UnixNano())
+	before := getMonotonicNanoUint64()
+	if before == 0 {
+		t.Skip("CLOCK_MONOTONIC is unavailable in this environment")
+	}
 	exp := getExpiryUint64(0)
-	after := uint64(time.Now().UnixNano())
+	after := getMonotonicNanoUint64()
+	if after == 0 {
+		t.Skip("CLOCK_MONOTONIC is unavailable in this environment")
+	}
 
 	if exp == 0 {
 		t.Fatalf("expected non-zero expiry for zero window")

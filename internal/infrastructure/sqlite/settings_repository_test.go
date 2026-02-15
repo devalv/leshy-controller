@@ -43,6 +43,7 @@ func TestManagementSettingsRepositorySaveSettings(t *testing.T) {
 				GuardedPortsRange:  "3389-3391",
 				Iface:              "ens18",
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 		},
 		{
@@ -55,6 +56,7 @@ func TestManagementSettingsRepositorySaveSettings(t *testing.T) {
 				GuardedPortsRange:  "3392-3399",
 				Iface:              "ens19",
 				HandshakeWindowSec: 1200,
+				InactiveTimerSec:   900,
 			},
 		},
 	}
@@ -96,6 +98,13 @@ func TestManagementSettingsRepositorySaveSettings(t *testing.T) {
 					tt.settings.HandshakeWindowSec,
 				)
 			}
+			if stored.InactiveTimerSec != tt.settings.InactiveTimerSec {
+				t.Fatalf(
+					"stored inactive timer = %d, want %d",
+					stored.InactiveTimerSec,
+					tt.settings.InactiveTimerSec,
+				)
+			}
 			if stored.UpdatedAt.IsZero() {
 				t.Fatal("updated_at should not be zero")
 			}
@@ -112,6 +121,13 @@ func TestManagementSettingsRepositorySaveSettings(t *testing.T) {
 					"loaded handshake window = %d, want %d",
 					loaded.HandshakeWindowSec,
 					tt.settings.HandshakeWindowSec,
+				)
+			}
+			if loaded.InactiveTimerSec != tt.settings.InactiveTimerSec {
+				t.Fatalf(
+					"loaded inactive timer = %d, want %d",
+					loaded.InactiveTimerSec,
+					tt.settings.InactiveTimerSec,
 				)
 			}
 		})

@@ -29,12 +29,13 @@ type RuntimeSettingsApplier struct {
 	filterRuntime filter.RuntimeConfigurator
 	opts          RuntimeSettingsApplierOptions
 
-	manager      *Manager
-	pendingMap   *ebpf.Map
-	guardedMap   *ebpf.Map
-	statsMap     *ebpf.Map
-	activeMap    *ebpf.Map
-	currentIface string
+	manager       *Manager
+	pendingMap    *ebpf.Map
+	guardedMap    *ebpf.Map
+	statsMap      *ebpf.Map
+	activeMap     *ebpf.Map
+	runtimeCfgMap *ebpf.Map
+	currentIface  string
 }
 
 // NewRuntimeSettingsApplier создает новый runtime settings applier.
@@ -65,8 +66,12 @@ func (a *RuntimeSettingsApplier) Apply(ctx context.Context, settings management.
 		return fmt.Errorf("ensure attached manager: %w", err)
 	}
 
-	if a.guardedMap == nil || a.pendingMap == nil || a.statsMap == nil {
+	if a.guardedMap == nil || a.pendingMap == nil || a.statsMap == nil || a.activeMap == nil || a.runtimeCfgMap == nil {
 		return errors.New("manager maps are not initialized")
+	}
+
+	if err := SetInactiveTimerSec(a.runtimeCfgMap, settings.InactiveTimerSec); err != nil {
+		return fmt.Errorf("set runtime inactive timer: %w", err)
 	}
 
 	if err := InitializeGuardedPorts(settings.GuardedPortsRange, a.guardedMap); err != nil {
@@ -99,6 +104,7 @@ func (a *RuntimeSettingsApplier) Close() error {
 	a.guardedMap = nil
 	a.statsMap = nil
 	a.activeMap = nil
+	a.runtimeCfgMap = nil
 	a.currentIface = ""
 	if err != nil {
 		return fmt.Errorf("close bpf manager: %w", err)
@@ -147,6 +153,18 @@ func (a *RuntimeSettingsApplier) ensureAttached(ctx context.Context, iface strin
 
 		return errors.New("failed to resolve maps from attached manager")
 	}
+	if manager.coll == nil {
+		_ = manager.Close()
+
+		return errors.New("attached manager collection is nil")
+	}
+
+	runtimeCfgMap := manager.coll.Maps[RuntimeConfigMapName]
+	if runtimeCfgMap == nil {
+		_ = manager.Close()
+
+		return errors.New("failed to resolve runtime config map from attached manager")
+	}
 
 	if a.manager != nil {
 		_ = a.manager.Close()
@@ -157,6 +175,7 @@ func (a *RuntimeSettingsApplier) ensureAttached(ctx context.Context, iface strin
 	a.guardedMap = guardedMap
 	a.statsMap = statsMap
 	a.activeMap = activeMap
+	a.runtimeCfgMap = runtimeCfgMap
 	a.currentIface = iface
 
 	return nil

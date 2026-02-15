@@ -40,6 +40,7 @@ type UpsertManagementSettingsRequest struct {
 	GuardedPortsRange  string `json:"guarded_ports_range"`
 	Iface              string `json:"iface"`
 	HandshakeWindowSec int    `json:"handshake_window_sec"`
+	InactiveTimerSec   int    `json:"inactive_timer_sec"`
 }
 
 // UpsertManagementSettingsResponse — JSON-контракт для ответа на POST /management/settings запрос.
@@ -55,6 +56,7 @@ type UpsertManagementSettingsResponse struct {
 	GuardedPortsRange  string `json:"guarded_ports_range"`
 	Iface              string `json:"iface"`
 	HandshakeWindowSec int    `json:"handshake_window_sec"`
+	InactiveTimerSec   int    `json:"inactive_timer_sec"`
 	UpdatedAt          string `json:"updated_at"` // RFC3339 (UTC)
 }
 
@@ -70,6 +72,7 @@ type GetManagementSettingsResponse struct {
 	GuardedPortsRange  string `json:"guarded_ports_range"`
 	Iface              string `json:"iface"`
 	HandshakeWindowSec int    `json:"handshake_window_sec"`
+	InactiveTimerSec   int    `json:"inactive_timer_sec"`
 	UpdatedAt          string `json:"updated_at"` // RFC3339 (UTC)
 }
 

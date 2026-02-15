@@ -68,7 +68,7 @@
 │   │   │   ├── `attach_manager.go`     # Attach lifecycle
 │   │   │   ├── `attach_tc.go`          # Загрузка/attach tc+bpf
 │   │   │   ├── `filter_backend.go`     # Backend adapter для application/filter
-│   │   │   ├── `runtime_settings_applier.go` # Динамическое применение iface/ports/window
+│   │   │   ├── `runtime_settings_applier.go` # Динамическое применение iface/ports/handshake/inactive-timer
 │   │   │   ├── `diagnostics_linux.go`  # Linux debug diagnostics
 │   │   │   └── `*.go`                  # guarded ports, pending, stats, utils
 │   │   └── sqlite/
@@ -157,7 +157,7 @@
 Текущая схема:
 1. `POST /api/v1/management/settings` доступен только в bootstrap-режиме (заголовок `X-Bootstrap-Token`).
 2. `PATCH /api/v1/management/settings` доступен только после первичной конфигурации и авторизуется тем же `Bearer` access token, что и `/allow`.
-3. В `settings` передаются runtime-параметры фильтра: `iface`, `guarded_ports_range`, `handshake_window_sec`.
+3. В `settings` передаются runtime-параметры фильтра: `iface`, `guarded_ports_range`, `handshake_window_sec`, `inactive_timer_sec`.
 4. `POST /api/v1/management/block` очищает разрешающие правила (`pending` и `active_flows`), созданные через `/allow`.
 5. После успешного `POST` или `PATCH` приложение динамически поднимает/обновляет eBPF runtime.
 6. `JWT` для `/allow`, `PATCH /management/settings` и `POST /management/block` проверяется по `JWKS` внешней системы (`EdDSA / Ed25519`).
