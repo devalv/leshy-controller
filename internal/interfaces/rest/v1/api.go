@@ -255,6 +255,7 @@ func handleManagementSettingsSave(
 		GuardedPortsRange:  req.GuardedPortsRange,
 		Iface:              req.Iface,
 		HandshakeWindowSec: req.HandshakeWindowSec,
+		InactiveTimerSec:   req.InactiveTimerSec,
 	})
 	if err != nil {
 		switch {
@@ -264,7 +265,8 @@ func handleManagementSettingsSave(
 			errors.Is(err, management.ErrInvalidRequiredScope),
 			errors.Is(err, management.ErrInvalidGuardedPortsRange),
 			errors.Is(err, management.ErrInvalidIface),
-			errors.Is(err, management.ErrInvalidHandshakeWindow):
+			errors.Is(err, management.ErrInvalidHandshakeWindow),
+			errors.Is(err, management.ErrInvalidInactiveTimer):
 			http.Error(w, err.Error(), http.StatusBadRequest)
 
 			return
@@ -307,6 +309,7 @@ func handleManagementSettingsPatch(
 		GuardedPortsRange:  req.GuardedPortsRange,
 		Iface:              req.Iface,
 		HandshakeWindowSec: req.HandshakeWindowSec,
+		InactiveTimerSec:   req.InactiveTimerSec,
 	})
 	if err != nil {
 		switch {
@@ -316,7 +319,8 @@ func handleManagementSettingsPatch(
 			errors.Is(err, management.ErrInvalidRequiredScope),
 			errors.Is(err, management.ErrInvalidGuardedPortsRange),
 			errors.Is(err, management.ErrInvalidIface),
-			errors.Is(err, management.ErrInvalidHandshakeWindow):
+			errors.Is(err, management.ErrInvalidHandshakeWindow),
+			errors.Is(err, management.ErrInvalidInactiveTimer):
 			http.Error(w, err.Error(), http.StatusBadRequest)
 
 			return
@@ -372,6 +376,7 @@ func handleManagementSettingsGet(
 		GuardedPortsRange:  stored.GuardedPortsRange,
 		Iface:              stored.Iface,
 		HandshakeWindowSec: stored.HandshakeWindowSec,
+		InactiveTimerSec:   stored.InactiveTimerSec,
 		UpdatedAt:          stored.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 	if err := writeJSON(w, resp); err != nil {
@@ -445,6 +450,7 @@ func managementSettingsResponse(
 		GuardedPortsRange:  stored.GuardedPortsRange,
 		Iface:              stored.Iface,
 		HandshakeWindowSec: stored.HandshakeWindowSec,
+		InactiveTimerSec:   stored.InactiveTimerSec,
 		UpdatedAt:          stored.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
@@ -558,6 +564,9 @@ func decodeManagementSettingsJSON(r *http.Request) (restv1.UpsertManagementSetti
 	}
 	if req.HandshakeWindowSec == 0 {
 		return req, errors.New("handshake_window_sec is required")
+	}
+	if req.InactiveTimerSec == 0 {
+		return req, errors.New("inactive_timer_sec is required")
 	}
 
 	// Смысловая валидация значений выполняется при записи настроек ((s *Service) SaveSettings)

@@ -14,8 +14,11 @@ import (
 const (
 	minUserPort           = 1023
 	maxPort               = 65535
+	maxGuardedPorts       = 2048
 	minHandshakeWindowSec = 1
 	maxHandshakeWindowSec = 10800
+	minInactiveTimerSec   = 1
+	maxInactiveTimerSec   = 10800
 )
 
 var (
@@ -26,6 +29,7 @@ var (
 	ErrInvalidGuardedPortsRange = errors.New("invalid guarded ports range")
 	ErrInvalidIface             = errors.New("invalid network interface")
 	ErrInvalidHandshakeWindow   = errors.New("invalid handshake window")
+	ErrInvalidInactiveTimer     = errors.New("invalid inactive timer")
 	ErrInvalidAccessToken       = errors.New("invalid access token")
 	ErrAuthorizationUnavailable = errors.New("authorization unavailable")
 	ErrInvalidBootstrapToken    = errors.New("invalid bootstrap token")
@@ -248,6 +252,9 @@ func normalizeAndValidate(settings Settings) (Settings, error) {
 	if err := validateHandshakeWindowSec(settings.HandshakeWindowSec); err != nil {
 		return Settings{}, fmt.Errorf("%w: %s", ErrInvalidHandshakeWindow, err.Error())
 	}
+	if err := validateInactiveTimerSec(settings.InactiveTimerSec); err != nil {
+		return Settings{}, fmt.Errorf("%w: %s", ErrInvalidInactiveTimer, err.Error())
+	}
 
 	return Settings{
 		Issuer:             issuer,
@@ -257,6 +264,7 @@ func normalizeAndValidate(settings Settings) (Settings, error) {
 		GuardedPortsRange:  guardedPortsRange,
 		Iface:              iface,
 		HandshakeWindowSec: settings.HandshakeWindowSec,
+		InactiveTimerSec:   settings.InactiveTimerSec,
 	}, nil
 }
 
@@ -389,6 +397,15 @@ func validateGuardedPortsRange(rangeStr string) error {
 		return fmt.Errorf("start port %d is greater than end port %d", start, end)
 	}
 
+	portsCount := end - start + 1
+	if portsCount > maxGuardedPorts {
+		return fmt.Errorf(
+			"guarded ports range contains %d ports, maximum is %d",
+			portsCount,
+			maxGuardedPorts,
+		)
+	}
+
 	return nil
 }
 
@@ -399,6 +416,18 @@ func validateHandshakeWindowSec(windowSec int) error {
 
 	if windowSec > maxHandshakeWindowSec {
 		return fmt.Errorf("handshake window cannot exceed %d seconds", maxHandshakeWindowSec)
+	}
+
+	return nil
+}
+
+func validateInactiveTimerSec(timerSec int) error {
+	if timerSec < minInactiveTimerSec {
+		return fmt.Errorf("inactive timer must be at least %d second", minInactiveTimerSec)
+	}
+
+	if timerSec > maxInactiveTimerSec {
+		return fmt.Errorf("inactive timer cannot exceed %d seconds", maxInactiveTimerSec)
 	}
 
 	return nil

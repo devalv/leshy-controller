@@ -59,8 +59,26 @@
         <mxCell id="Ke7CCr60utAyysVLhnTq-18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="client" vertex="1">
           <mxGeometry height="60" width="120" x="250" y="10" as="geometry" />
         </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-21" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="/management/settings&#xa;handshake_window_sec + inactive_timer_sec" vertex="1">
+          <mxGeometry height="60" width="180" x="60" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-22" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="runtime_settings_applier" vertex="1">
+          <mxGeometry height="60" width="150" x="260" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-23" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="l4_runtime_cfg[0]&#xa;(inactive_allow_ns)" vertex="1">
+          <mxGeometry height="60" width="170" x="420" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-24" edge="1" parent="1" source="Ke7CCr60utAyysVLhnTq-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="Ke7CCr60utAyysVLhnTq-22" value="apply runtime settings">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-25" edge="1" parent="1" source="Ke7CCr60utAyysVLhnTq-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="Ke7CCr60utAyysVLhnTq-23" value="write timer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Ke7CCr60utAyysVLhnTq-26" edge="1" parent="1" source="Ke7CCr60utAyysVLhnTq-23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="Ke7CCr60utAyysVLhnTq-7" value="active flow TTL">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
         <mxCell id="Ke7CCr60utAyysVLhnTq-20" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="controller + proxy host" vertex="1">
-          <mxGeometry height="30" width="110" x="460" y="120" as="geometry" />
+          <mxGeometry height="30" width="110" x="460" y="70" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

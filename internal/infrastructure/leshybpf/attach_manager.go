@@ -217,10 +217,17 @@ func runDebugDiagnostics(ctx context.Context, debug bool, iface, bpfPinPath stri
 	}
 
 	if err := RunDiagnostics(ctx, DiagnosticsOptions{
-		Iface:    iface,
-		PinPath:  bpfPinPath,
-		Program:  ProgramName,
-		MapNames: []string{PendingSrcMapName, GuardedPortsMapName, StatsMapName, ActiveFlowsMapName, LogsMapName},
+		Iface:   iface,
+		PinPath: bpfPinPath,
+		Program: ProgramName,
+		MapNames: []string{
+			PendingSrcMapName,
+			GuardedPortsMapName,
+			StatsMapName,
+			ActiveFlowsMapName,
+			RuntimeConfigMapName,
+			LogsMapName,
+		},
 	}); err != nil {
 		return fmt.Errorf("running diagnostics: %w", err)
 	}
@@ -246,6 +253,7 @@ func cleanupExistingArtifacts(ctx context.Context, iface, bpfPinPath string, deb
 		GuardedPortsMapName,
 		StatsMapName,
 		ActiveFlowsMapName,
+		RuntimeConfigMapName,
 		LogsMapName,
 	}
 	for _, mapName := range oldMaps {
@@ -270,6 +278,7 @@ func pinMapSpecs(spec *ebpf.CollectionSpec) {
 	spec.Maps[ActiveFlowsMapName].Pinning = ebpf.PinByName
 	spec.Maps[StatsMapName].Pinning = ebpf.PinByName
 	spec.Maps[GuardedPortsMapName].Pinning = ebpf.PinByName
+	spec.Maps[RuntimeConfigMapName].Pinning = ebpf.PinByName
 	if spec.Maps[LogsMapName] != nil {
 		spec.Maps[LogsMapName].Pinning = ebpf.PinByName
 	}

@@ -17,6 +17,7 @@ type Settings struct {
 	GuardedPortsRange  string
 	Iface              string
 	HandshakeWindowSec int
+	InactiveTimerSec   int
 }
 
 // StoredSettings описывает настройки хранящиеся в БД.

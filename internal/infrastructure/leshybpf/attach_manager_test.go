@@ -18,21 +18,23 @@ func TestPinMapSpecs(t *testing.T) {
 		{
 			name: "pin required maps and logs",
 			maps: map[string]*ebpf.MapSpec{
-				PendingSrcMapName:   new(ebpf.MapSpec),
-				ActiveFlowsMapName:  new(ebpf.MapSpec),
-				StatsMapName:        new(ebpf.MapSpec),
-				GuardedPortsMapName: new(ebpf.MapSpec),
-				LogsMapName:         new(ebpf.MapSpec),
+				PendingSrcMapName:    new(ebpf.MapSpec),
+				ActiveFlowsMapName:   new(ebpf.MapSpec),
+				StatsMapName:         new(ebpf.MapSpec),
+				GuardedPortsMapName:  new(ebpf.MapSpec),
+				RuntimeConfigMapName: new(ebpf.MapSpec),
+				LogsMapName:          new(ebpf.MapSpec),
 			},
 			hasLogs: true,
 		},
 		{
 			name: "pin required maps without logs",
 			maps: map[string]*ebpf.MapSpec{
-				PendingSrcMapName:   new(ebpf.MapSpec),
-				ActiveFlowsMapName:  new(ebpf.MapSpec),
-				StatsMapName:        new(ebpf.MapSpec),
-				GuardedPortsMapName: new(ebpf.MapSpec),
+				PendingSrcMapName:    new(ebpf.MapSpec),
+				ActiveFlowsMapName:   new(ebpf.MapSpec),
+				StatsMapName:         new(ebpf.MapSpec),
+				GuardedPortsMapName:  new(ebpf.MapSpec),
+				RuntimeConfigMapName: new(ebpf.MapSpec),
 			},
 			hasLogs: false,
 		},
@@ -51,6 +53,7 @@ func TestPinMapSpecs(t *testing.T) {
 				ActiveFlowsMapName,
 				StatsMapName,
 				GuardedPortsMapName,
+				RuntimeConfigMapName,
 			}
 			for _, mapName := range required {
 				if spec.Maps[mapName].Pinning != ebpf.PinByName {

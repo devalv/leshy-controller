@@ -30,6 +30,9 @@ build:
 	go env -w GOARCH=amd64
 	go build -o controller-app ./cmd/controller
 
+build-cbpf:
+	./devops/build.sh
+
 run:
 	go run ./cmd --config ./config.yml
 

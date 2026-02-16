@@ -2,7 +2,6 @@ package leshybpf
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -64,20 +63,31 @@ func (b *FilterBackend) FlushAuthorizations(ctx context.Context) (filter.FlushRe
 func (b *FilterBackend) VerifyPending(ctx context.Context, ip net.IP, port uint16) error {
 	_ = ctx
 
-	portNetwork := HostToNetworkPort(port)
-
-	keyBytes := make([]byte, 8) //nolint:mnd
-	binary.BigEndian.PutUint32(keyBytes[0:4], binary.BigEndian.Uint32(ip.To4()))
-	binary.BigEndian.PutUint16(keyBytes[4:6], portNetwork)
-	binary.BigEndian.PutUint16(keyBytes[6:8], 0)
+	keyBytes, err := pendingKeyPendingSrc(ip, port)
+	if err != nil {
+		return fmt.Errorf("build pending key: %w", err)
+	}
 
 	var value uint64
-	if err := b.pending.Lookup(keyBytes, &value); err != nil {
+	if err := b.pending.Lookup(&keyBytes, &value); err != nil {
 		return fmt.Errorf("failed to read back inserted entry %w", err)
 	}
 
+	approxUTC, remaining, ok := describeMonotonicExpiryNow(value)
+	if ok {
+		log.Debug().Msgf(
+			"verified: entry exists in map, expires at monotonic_ns=%d (remaining=%s, approx_utc=%s)",
+			value,
+			remaining.Round(time.Millisecond),
+			approxUTC.Format(time.RFC3339),
+		)
+
+		return nil
+	}
+
 	log.Debug().Msgf(
-		"verified: entry exists in map, expires at %s UTC", formatNanoTimestamp(value),
+		"verified: entry exists in map, expires at monotonic_ns=%d (remaining=unknown, approx_utc=unknown)",
+		value,
 	)
 
 	return nil

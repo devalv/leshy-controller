@@ -7,9 +7,9 @@ import (
 )
 
 // pendingKeyPendingSrc строит ключ для l4_pending_src.
-// Pending key layout (x86_64):
+// Pending key layout:
 // [0:4] IPv4 bytes as in packet (network order bytes)
-// [4:6] destination port in little-endian (matches eBPF lookup_key builder)
+// [4:6] destination port in little-endian (must match eBPF lookup_key builder)
 // [6:8] pad (zeros).
 func pendingKeyPendingSrc(ip net.IP, port uint16) ([8]byte, error) {
 	ip4 := ip.To4()

@@ -118,6 +118,7 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			wantErr:        ErrInvalidIssuer,
 			wantSaveCalls:  0,
@@ -134,6 +135,7 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			wantErr:        ErrInvalidAudience,
 			wantSaveCalls:  0,
@@ -150,6 +152,7 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			wantErr:        ErrInvalidJWKSURL,
 			wantSaveCalls:  0,
@@ -166,6 +169,7 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			wantErr:        ErrInvalidRequiredScope,
 			wantSaveCalls:  0,
@@ -182,6 +186,24 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024 - 2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
+			},
+			wantErr:        ErrInvalidGuardedPortsRange,
+			wantSaveCalls:  0,
+			wantCheckCalls: 0,
+			wantApplyCalls: 0,
+		},
+		{
+			name: "guarded ports range exceeds max entries",
+			input: Settings{
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-3072", // 2049 ports
+				Iface:              iface,
+				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			wantErr:        ErrInvalidGuardedPortsRange,
 			wantSaveCalls:  0,
@@ -198,6 +220,7 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              "this-interface-does-not-exist",
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			wantErr:        ErrInvalidIface,
 			wantSaveCalls:  0,
@@ -214,8 +237,26 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 0,
+				InactiveTimerSec:   300,
 			},
 			wantErr:        ErrInvalidHandshakeWindow,
+			wantSaveCalls:  0,
+			wantCheckCalls: 0,
+			wantApplyCalls: 0,
+		},
+		{
+			name: "invalid inactive timer",
+			input: Settings{
+				Issuer:             "https://auth.example.com",
+				Audience:           "leshy-controller",
+				JWKSURL:            "https://auth.example.com/jwks.json",
+				RequiredScope:      "allow:write",
+				GuardedPortsRange:  "1024-2048",
+				Iface:              iface,
+				HandshakeWindowSec: 600,
+				InactiveTimerSec:   0,
+			},
+			wantErr:        ErrInvalidInactiveTimer,
 			wantSaveCalls:  0,
 			wantCheckCalls: 0,
 			wantApplyCalls: 0,
@@ -230,6 +271,7 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			verifierFn: func(context.Context, Settings) error {
 				return verifierErr
@@ -249,6 +291,7 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			runtimeApplyFn: func(context.Context, Settings) error {
 				return runtimeApplyErr
@@ -268,6 +311,7 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			repoSaveFn: func(context.Context, Settings) (StoredSettings, error) {
 				return StoredSettings{}, repositoryErr
@@ -287,6 +331,7 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              " " + iface + " ",
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			wantSaveCalls:  1,
 			wantCheckCalls: 1,
@@ -303,6 +348,7 @@ func TestServiceSaveSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 		},
 	}
@@ -386,6 +432,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			repo: repositoryStub{
 				loadErr: ErrSettingsNotFound,
@@ -406,6 +453,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			repo: repositoryStub{
 				loadErr: repositoryErr,
@@ -426,6 +474,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			repo: repositoryStub{
 				loadSettings: StoredSettings{
@@ -437,6 +486,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 						GuardedPortsRange:  "1024-2048",
 						Iface:              iface,
 						HandshakeWindowSec: 600,
+						InactiveTimerSec:   300,
 					},
 				},
 			},
@@ -456,6 +506,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			repo: repositoryStub{
 				loadSettings: StoredSettings{
@@ -467,6 +518,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 						GuardedPortsRange:  "1024-2048",
 						Iface:              iface,
 						HandshakeWindowSec: 600,
+						InactiveTimerSec:   300,
 					},
 				},
 			},
@@ -489,6 +541,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			repo: repositoryStub{
 				loadSettings: StoredSettings{
@@ -500,6 +553,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 						GuardedPortsRange:  "1024-2048",
 						Iface:              iface,
 						HandshakeWindowSec: 600,
+						InactiveTimerSec:   300,
 					},
 				},
 				saveFn: func(context.Context, Settings) (StoredSettings, error) {
@@ -522,6 +576,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			repo: repositoryStub{
 				loadSettings: StoredSettings{
@@ -533,6 +588,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 						GuardedPortsRange:  "1024-2048",
 						Iface:              iface,
 						HandshakeWindowSec: 600,
+						InactiveTimerSec:   300,
 					},
 				},
 			},
@@ -555,6 +611,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              " " + iface + " ",
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 			repo: repositoryStub{
 				loadSettings: StoredSettings{
@@ -566,6 +623,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 						GuardedPortsRange:  "1024-2048",
 						Iface:              iface,
 						HandshakeWindowSec: 600,
+						InactiveTimerSec:   300,
 					},
 				},
 			},
@@ -585,6 +643,7 @@ func TestServiceUpdateSettings(t *testing.T) {
 				GuardedPortsRange:  "1024-2048",
 				Iface:              iface,
 				HandshakeWindowSec: 600,
+				InactiveTimerSec:   300,
 			},
 		},
 	}

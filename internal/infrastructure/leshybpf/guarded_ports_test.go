@@ -18,7 +18,7 @@ func newGuardedPortsMap(t *testing.T) *ebpf.Map {
 		Type:       ebpf.Hash,
 		KeySize:    2, // uint16
 		ValueSize:  1, // uint8
-		MaxEntries: 256,
+		MaxEntries: GuardedPortsMax,
 	}
 
 	m, err := ebpf.NewMap(spec)
@@ -70,6 +70,8 @@ func TestParsePortRange_Invalid(t *testing.T) {
 		{"too_many_dashes", "1-2-3", "invalid port range format"},
 		{"bad_start", "abc-2000", "invalid start port"},
 		{"bad_end", "1000-xyz", "invalid end port"},
+		{"start_gt_end", "2000-1000", "start 2000 is greater than end 1000"},
+		{"too_wide", "1024-3072", "maximum supported is"},
 	}
 
 	for _, tc := range cases {

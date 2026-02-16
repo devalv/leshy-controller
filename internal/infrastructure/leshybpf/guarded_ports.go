@@ -88,6 +88,19 @@ func parsePortRange(portsRange string) ([]uint16, error) {
 		return nil, fmt.Errorf("invalid end port: %s", parts[1])
 	}
 
+	if start > end {
+		return nil, fmt.Errorf("invalid port range: start %d is greater than end %d", start, end)
+	}
+
+	portsCount := end - start + 1
+	if portsCount > GuardedPortsMax {
+		return nil, fmt.Errorf(
+			"port range contains %d ports, maximum supported is %d",
+			portsCount,
+			GuardedPortsMax,
+		)
+	}
+
 	var ports []uint16
 	for p := start; p <= end; p++ {
 		ports = append(ports, uint16(p))
