@@ -73,10 +73,21 @@ func (b *FilterBackend) VerifyPending(ctx context.Context, ip net.IP, port uint1
 		return fmt.Errorf("failed to read back inserted entry %w", err)
 	}
 
+	approxUTC, remaining, ok := describeMonotonicExpiryNow(value)
+	if ok {
+		log.Debug().Msgf(
+			"verified: entry exists in map, expires at monotonic_ns=%d (remaining=%s, approx_utc=%s)",
+			value,
+			remaining.Round(time.Millisecond),
+			approxUTC.Format(time.RFC3339),
+		)
+
+		return nil
+	}
+
 	log.Debug().Msgf(
-		"verified: entry exists in map, expires at monotonic_ns=%d (epoch_view=%s)",
+		"verified: entry exists in map, expires at monotonic_ns=%d (remaining=unknown, approx_utc=unknown)",
 		value,
-		formatNanoTimestamp(value),
 	)
 
 	return nil

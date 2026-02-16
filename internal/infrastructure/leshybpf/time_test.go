@@ -2,7 +2,6 @@ package leshybpf
 
 import (
 	"math"
-	"strings"
 	"testing"
 	"time"
 )
@@ -36,41 +35,6 @@ func TestGetUnixNanoUint64_IsMonotonicInPractice(t *testing.T) {
 
 	if b <= a {
 		t.Fatalf("expected second timestamp to be greater: a=%d b=%d", a, b)
-	}
-}
-
-func TestFormatNanoTimestamp_ZeroIsEpochUTC(t *testing.T) {
-	t.Parallel()
-
-	got := formatNanoTimestamp(0)
-	want := "1970-01-01T00:00:00Z"
-	if got != want {
-		t.Fatalf("unexpected formatted timestamp: got=%q want=%q", got, want)
-	}
-}
-
-func TestFormatNanoTimestamp_MaxInt64IsOk(t *testing.T) {
-	t.Parallel()
-
-	// MaxInt64 наносекунд от эпохи — допустимо
-	got := formatNanoTimestamp(uint64(math.MaxInt64))
-	if got == "" || got == "⚠ Time conversion failed!" {
-		t.Fatalf("expected valid RFC3339 string, got=%q", got)
-	}
-
-	// Должно быть UTC и RFC3339 (заканчиваться на Z)
-	if got[len(got)-1] != 'Z' {
-		t.Fatalf("expected UTC (Z suffix), got=%q", got)
-	}
-}
-
-func TestFormatNanoTimestamp_TooLargeReturnsFailureMarker(t *testing.T) {
-	t.Parallel()
-
-	got := formatNanoTimestamp(uint64(math.MaxInt64) + 1)
-	want := "⚠ Time conversion failed!"
-	if got != want {
-		t.Fatalf("unexpected result: got=%q want=%q", got, want)
 	}
 }
 
@@ -137,17 +101,59 @@ func TestGetExpiryUint64_NegativeHugeWindowReturnsZero(t *testing.T) {
 	}
 }
 
-func TestExpiryThenFormat_IsRFC3339UTC_NotFailureMarker(t *testing.T) {
+func TestDescribeMonotonicExpiry(t *testing.T) {
 	t.Parallel()
 
+	base := time.Date(2026, time.February, 16, 12, 0, 0, 0, time.UTC)
+
 	tests := []struct {
-		name   string
-		window time.Duration
+		name          string
+		expiryMono    uint64
+		nowMono       uint64
+		nowWall       time.Time
+		wantOK        bool
+		wantRemaining time.Duration
 	}{
-		{"small_positive", 1 * time.Second},
-		{"small_negative_but_not_pre1970", -1 * time.Second},
-		{"zero", 0},
-		{"larger_positive", 5 * time.Second},
+		{
+			name:          "future expiry",
+			expiryMono:    2_000,
+			nowMono:       1_000,
+			nowWall:       base,
+			wantOK:        true,
+			wantRemaining: time.Microsecond,
+		},
+		{
+			name:          "past expiry",
+			expiryMono:    1_000,
+			nowMono:       2_500,
+			nowWall:       base,
+			wantOK:        true,
+			wantRemaining: -1500 * time.Nanosecond,
+		},
+		{
+			name:          "invalid zero expiry",
+			expiryMono:    0,
+			nowMono:       2_500,
+			nowWall:       base,
+			wantOK:        false,
+			wantRemaining: 0,
+		},
+		{
+			name:          "invalid zero monotonic now",
+			expiryMono:    10,
+			nowMono:       0,
+			nowWall:       base,
+			wantOK:        false,
+			wantRemaining: 0,
+		},
+		{
+			name:          "invalid zero wall time",
+			expiryMono:    10,
+			nowMono:       1,
+			nowWall:       time.Time{},
+			wantOK:        false,
+			wantRemaining: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -155,81 +161,41 @@ func TestExpiryThenFormat_IsRFC3339UTC_NotFailureMarker(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			exp := getExpiryUint64(tt.window)
-			if exp == 0 && tt.window < 0 {
-				// В случае сильно отрицательных окон мы возвращаем 0.
-				// Для -1s это не должно случиться, но оставим защёлку на случай нестандартного времени системы.
-				t.Skipf("expiry is 0 for window=%v; system time may be unexpected", tt.window)
-			}
-			if exp == 0 && tt.window >= 0 {
-				t.Fatalf("expected non-zero expiry for window=%v", tt.window)
+			gotUTC, gotRemaining, gotOK := describeMonotonicExpiry(tt.expiryMono, tt.nowMono, tt.nowWall)
+			if gotOK != tt.wantOK {
+				t.Fatalf("ok = %v, want %v", gotOK, tt.wantOK)
 			}
 
-			s := formatNanoTimestamp(exp)
+			if !tt.wantOK {
+				if !gotUTC.IsZero() || gotRemaining != 0 {
+					t.Fatalf("expected zero values, got utc=%v remaining=%v", gotUTC, gotRemaining)
+				}
 
-			// Для нормальных значений не должен возвращаться маркер ошибки.
-			if s == "⚠ Time conversion failed!" {
-				t.Fatalf("unexpected failure marker for expiry=%d window=%v", exp, tt.window)
+				return
 			}
 
-			// Должно быть UTC (RFC3339 с 'Z' в конце).
-			if !strings.HasSuffix(s, "Z") {
-				t.Fatalf("expected UTC (Z suffix), got %q", s)
+			if gotRemaining != tt.wantRemaining {
+				t.Fatalf("remaining = %v, want %v", gotRemaining, tt.wantRemaining)
 			}
 
-			// Строка должна парситься как RFC3339.
-			parsed, err := time.Parse(time.RFC3339, s)
-			if err != nil {
-				t.Fatalf("expected RFC3339, parse error: %v (value=%q)", err, s)
-			}
-
-			// И она должна соответствовать исходному значению в наносекундах.
-			// (UTC() в formatNanoTimestamp гарантирует единый формат)
-			want := truncateToSecondNano(exp)
-			if got := uint64(parsed.UTC().UnixNano()); got != want {
-				t.Fatalf("roundtrip mismatch: parsed=%d want=%d (s=%q)", got, want, s)
+			wantUTC := tt.nowWall.UTC().Add(tt.wantRemaining)
+			if !gotUTC.Equal(wantUTC) {
+				t.Fatalf("approx utc = %v, want %v", gotUTC, wantUTC)
 			}
 		})
 	}
 }
 
-func truncateToSecondNano(n uint64) uint64 {
-	const sec = uint64(1_000_000_000)
-	return (n / sec) * sec
-}
-
-func TestFormatNanoTimestamp_RoundtripArbitraryValues(t *testing.T) {
+func TestMonotonicDeltaDurationClamp(t *testing.T) {
 	t.Parallel()
 
-	values := []uint64{
-		0,
-		1,
-		999,
-		1_000_000_000,
-		1770235561740224942, // пример
+	gotFuture := monotonicDeltaDuration(maxInt64AsUint64+100, 0)
+	if gotFuture != time.Duration(math.MaxInt64) {
+		t.Fatalf("future clamp = %v, want %v", gotFuture, time.Duration(math.MaxInt64))
 	}
 
-	for _, v := range values {
-		v := v
-		t.Run("v", func(t *testing.T) {
-			t.Parallel()
-
-			s := formatNanoTimestamp(v)
-			if s == "⚠ Time conversion failed!" {
-				t.Fatalf("unexpected failure marker for v=%d", v)
-			}
-
-			tt, err := time.Parse(time.RFC3339, s)
-			if err != nil {
-				t.Fatalf("parse failed: %v (s=%q)", err, s)
-			}
-
-			got := uint64(tt.UnixNano())
-			want := truncateToSecondNano(v)
-
-			if got != want {
-				t.Fatalf("roundtrip mismatch (seconds precision): parsed=%d want=%d (s=%q)", got, want, s)
-			}
-		})
+	gotPast := monotonicDeltaDuration(0, maxInt64AsUint64+100)
+	if gotPast != -time.Duration(math.MaxInt64) {
+		t.Fatalf("past clamp = %v, want %v", gotPast, -time.Duration(math.MaxInt64))
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const maxInt64AsUint64 = uint64(math.MaxInt64)
+
 func getUnixNanoUint64() uint64 {
 	nano := time.Now().UnixNano()
 	if nano < 0 {
@@ -16,20 +18,6 @@ func getUnixNanoUint64() uint64 {
 	}
 
 	return uint64(nano)
-}
-
-func formatNanoTimestamp(value uint64) string {
-	// Проверяем, что значение не слишком большое
-	if value > math.MaxInt64 {
-		// Если это timestamp в наносекундах, максимальное значение
-		// соответствует примерно 292 годам (MaxInt64 наносекунд)
-		return "⚠ Time conversion failed!"
-	}
-
-	// Безопасное преобразование
-	t := time.Unix(0, int64(value)).UTC()
-
-	return t.Format(time.RFC3339)
 }
 
 func getMonotonicNanoUint64() uint64 {
@@ -94,4 +82,41 @@ func getExpiryUint64(window time.Duration) uint64 {
 	}
 
 	return expiryNano
+}
+
+func describeMonotonicExpiry(expiryMono uint64, nowMono uint64, nowWall time.Time) (time.Time, time.Duration, bool) {
+	if expiryMono == 0 || nowMono == 0 || nowWall.IsZero() {
+		return time.Time{}, 0, false
+	}
+
+	delta := monotonicDeltaDuration(expiryMono, nowMono)
+
+	return nowWall.UTC().Add(delta), delta, true
+}
+
+func describeMonotonicExpiryNow(expiryMono uint64) (time.Time, time.Duration, bool) {
+	nowMono := getMonotonicNanoUint64()
+	if nowMono == 0 {
+		return time.Time{}, 0, false
+	}
+
+	return describeMonotonicExpiry(expiryMono, nowMono, time.Now().UTC())
+}
+
+func monotonicDeltaDuration(expiryMono uint64, nowMono uint64) time.Duration {
+	if expiryMono >= nowMono {
+		diff := expiryMono - nowMono
+		if diff > maxInt64AsUint64 {
+			return time.Duration(math.MaxInt64)
+		}
+
+		return time.Duration(int64(diff))
+	}
+
+	diff := nowMono - expiryMono
+	if diff > maxInt64AsUint64 {
+		return -time.Duration(math.MaxInt64)
+	}
+
+	return -time.Duration(int64(diff))
 }
