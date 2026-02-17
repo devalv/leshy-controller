@@ -58,6 +58,18 @@ func Register(mux *http.ServeMux, d Deps) {
 
 // --- handlers ---
 
+// makeStatsHandler godoc
+// @Summary Показать статистику фильтра
+// @Description Возвращает статистику разрешенных и заблокированных пакетов.
+// @Tags filter
+// @Produce json
+// @Success 200 {object} restv1.StatsResponse
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 500 {string} string "failed to get stats"
+// @Failure 503 {string} string "Authorization is unavailable"
+// @Security BearerAuth
+// @Router /stats [get]
+// makeStatsHandler подключает обработчик ручки статистики.
 func makeStatsHandler(filterUseCase filter.UseCase) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -106,6 +118,21 @@ func makeStatsHandler(filterUseCase filter.UseCase) http.HandlerFunc {
 	}
 }
 
+// makeAllowHandler godoc
+// @Summary Разрешить временный доступ к защищенному порту
+// @Description Добавляет временную авторизацию IP+порт для доступа к защищенному порту.
+// @Tags filter
+// @Accept json
+// @Produce json
+// @Param request body restv1.AllowRequest true "Allow request"
+// @Success 200 {object} restv1.AllowResponse
+// @Failure 400 {string} string "Invalid JSON or validation error"
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 500 {string} string "allow failed"
+// @Failure 503 {string} string "filter is not configured"
+// @Security BearerAuth
+// @Router /allow [post]
+// makeAllowsHandler подключает обработчик ручки разрешения подключения.
 func makeAllowHandler(filterUseCase filter.UseCase) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -206,6 +233,23 @@ func makeManagementSettingsHandler(managementUseCase management.UseCase) http.Ha
 	}
 }
 
+// handleManagementSettingsSave godoc
+// @Summary Создать management settings (bootstrap)
+// @Description Первичная конфигурация управления через bootstrap-токен.
+// @Tags management
+// @Accept json
+// @Produce json
+// @Param X-Bootstrap-Token header string true "Bootstrap token"
+// @Param request body restv1.UpsertManagementSettingsRequest true "Management settings payload"
+// @Success 200 {object} restv1.UpsertManagementSettingsResponse
+// @Failure 400 {string} string "Invalid JSON or validation error"
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 409 {string} string "management settings are locked"
+// @Failure 500 {string} string "failed to save management settings"
+// @Failure 503 {string} string "management bootstrap is not configured"
+// @Security BootstrapAuth
+// @Router /management/settings [post]
+// handleManagementSettingsSave подключает обработчик первоначального сохранения настроек.
 func handleManagementSettingsSave(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -283,6 +327,22 @@ func handleManagementSettingsSave(
 	}
 }
 
+// handleManagementSettingsPatch godoc
+// @Summary Обновить management settings
+// @Description Обновляет уже сохраненные настройки управления.
+// @Tags management
+// @Accept json
+// @Produce json
+// @Param request body restv1.UpsertManagementSettingsRequest true "Management settings payload"
+// @Success 200 {object} restv1.UpsertManagementSettingsResponse
+// @Failure 400 {string} string "Invalid JSON or validation error"
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 409 {string} string "management settings are not configured"
+// @Failure 500 {string} string "failed to update management settings"
+// @Failure 503 {string} string "Authorization is unavailable"
+// @Security BearerAuth
+// @Router /management/settings [patch]
+// handleManagementSettingsPatch подключает обработчик изменения существующих настроек.
 func handleManagementSettingsPatch(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -341,6 +401,19 @@ func handleManagementSettingsPatch(
 	}
 }
 
+// handleManagementSettingsGet godoc
+// @Summary Получить management settings
+// @Description Возвращает текущие настройки управления и runtime-статус.
+// @Tags management
+// @Produce json
+// @Success 200 {object} restv1.GetManagementSettingsResponse
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 404 {string} string "management settings not found"
+// @Failure 500 {string} string "failed to get management settings"
+// @Failure 503 {string} string "Authorization is unavailable"
+// @Security BearerAuth
+// @Router /management/settings [get]
+// handleManagementSettingsGet подключает обработчик отображения существующих настроек.
 func handleManagementSettingsGet(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -384,6 +457,18 @@ func handleManagementSettingsGet(
 	}
 }
 
+// makeManagementBlockHandler godoc
+// @Summary Экстренно заблокировать все разрешения
+// @Description Очищает pending и active flow авторизации, созданные через /allow.
+// @Tags management
+// @Produce json
+// @Success 200 {object} restv1.BlockManagementResponse
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 500 {string} string "failed to block all connections"
+// @Failure 503 {string} string "filter is not configured or authorization unavailable"
+// @Security BearerAuth
+// @Router /management/block [post]
+// makeManagementBlockHandler подлючает обработчик блокировки всех подключений.
 func makeManagementBlockHandler(
 	filterUseCase filter.UseCase,
 	managementUseCase management.UseCase,

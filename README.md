@@ -6,6 +6,7 @@
 [![Trivy CBPF builder scan](https://github.com/devalv/leshy-controller/actions/workflows/trivy-cbpf-scan.yml/badge.svg)](https://github.com/devalv/leshy-controller/actions/workflows/trivy-cbpf-scan.yml)
 [![Trivy Go Scan](https://github.com/devalv/leshy-controller/actions/workflows/trivy-go-scan.yml/badge.svg)](https://github.com/devalv/leshy-controller/actions/workflows/trivy-go-scan.yml)
 [![tests-go](https://github.com/devalv/leshy-controller/actions/workflows/go-tests.yml/badge.svg)](https://github.com/devalv/leshy-controller/actions/workflows/go-tests.yml)
+[![coverage](./docs/badges/coverage.svg)](https://github.com/devalv/leshy-controller/actions/workflows/coverage-badge.yml)
 [![Dependency Graph](https://github.com/devalv/leshy-controller/actions/workflows/dependabot/update-graph/badge.svg)](https://github.com/devalv/leshy-controller/actions/workflows/dependabot/update-graph)
 
 Леший - контроллер.
@@ -116,6 +117,9 @@
 │   │   ├── grpc/
 │   │   └── swagger/
 │   │
+│   ├── badges/
+│   │   └── `coverage.svg`
+│   │
 │   ├── `architecture.md`
 │   │
 │   └── `c4.md`
@@ -165,6 +169,7 @@
 Примечание: insecure-режим с отключением TLS-проверки в `leshy-controller` не предусмотрен.
 
 [Дополнительные примеры](./docs/examples/basic.md)
+[openAPI](./docs/api/swagger/swagger.json)
 
 ## Сброс настроек
 
