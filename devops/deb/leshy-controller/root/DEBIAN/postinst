@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+SERVICE_NAME="leshy-controller.service"
+
+case "$1" in
+  configure)
+    install -d -m 0755 /opt/leshy-controller
+    install -d -m 0755 /var/log/leshy-controller
+    touch /var/log/leshy-controller/leshy-controller.log
+    chmod 0640 /var/log/leshy-controller/leshy-controller.log
+
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl daemon-reload || true
+      systemctl enable "$SERVICE_NAME" || true
+      systemctl restart "$SERVICE_NAME" || systemctl start "$SERVICE_NAME" || true
+    fi
+  ;;
+esac
+
+exit 0

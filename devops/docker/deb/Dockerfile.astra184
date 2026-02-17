@@ -1,0 +1,62 @@
+FROM golang:1.25-alpine AS go-builder
+
+ARG PACKAGE_ARCH=amd64
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${PACKAGE_ARCH} go build -trimpath -ldflags="-s -w" -o /tmp/leshy-controller ./cmd/controller
+
+FROM registry.astralinux.ru/library/astra/ubi18:1.8.4 AS builder
+
+ARG PACKAGE_VERSION=0.0.0
+ARG PACKAGE_ARCH=amd64
+
+RUN set -e && \
+    apt-get update && \
+    apt-get install -y -q --no-install-recommends \
+    ca-certificates \
+    make \
+    clang \
+    libbpf-dev \
+    llvm \
+    dpkg-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+COPY . .
+COPY --from=go-builder /tmp/leshy-controller /tmp/leshy-controller
+
+RUN make -C cbpf filter/l4_filter.o
+
+RUN sed "s/@LESHY_CONTROLLER_VERSION@/${PACKAGE_VERSION}/g" \
+    devops/deb/leshy-controller/root/DEBIAN/control.tpl > \
+    devops/deb/leshy-controller/root/DEBIAN/control
+
+RUN install -d -m 0755 devops/deb/leshy-controller/root/opt/leshy-controller/bpf && \
+    install -m 0755 /tmp/leshy-controller devops/deb/leshy-controller/root/opt/leshy-controller/leshy-controller && \
+    install -m 0644 cbpf/filter/l4_filter.o devops/deb/leshy-controller/root/opt/leshy-controller/bpf/l4_filter.o
+
+RUN rm -f \
+    devops/deb/leshy-controller/root/DEBIAN/control.tpl \
+    devops/deb/leshy-controller/root/opt/leshy-controller/.gitkeep
+
+RUN chmod 0755 \
+    devops/deb/leshy-controller/root/DEBIAN/postinst \
+    devops/deb/leshy-controller/root/DEBIAN/prerm \
+    devops/deb/leshy-controller/root/DEBIAN/postrm
+
+RUN dpkg-deb --build \
+    devops/deb/leshy-controller/root \
+    "/tmp/leshy-controller_${PACKAGE_VERSION}_${PACKAGE_ARCH}.deb"
+
+FROM scratch AS artifact
+
+ARG PACKAGE_VERSION=0.0.0
+ARG PACKAGE_ARCH=amd64
+
+COPY --from=builder "/tmp/leshy-controller_${PACKAGE_VERSION}_${PACKAGE_ARCH}.deb" /

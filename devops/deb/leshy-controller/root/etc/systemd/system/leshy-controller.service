@@ -1,0 +1,20 @@
+[Unit]
+Description=Leshy Controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/leshy-controller
+ExecStart=/opt/leshy-controller/leshy-controller --config /opt/leshy-controller/config.yml
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65535
+NoNewPrivileges=true
+StandardOutput=append:/var/log/leshy-controller/leshy-controller.log
+StandardError=append:/var/log/leshy-controller/leshy-controller.log
+
+[Install]
+WantedBy=multi-user.target

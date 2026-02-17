@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+SERVICE_NAME="leshy-controller.service"
+
+case "$1" in
+  remove)
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl daemon-reload || true
+    fi
+  ;;
+  purge)
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl daemon-reload || true
+    fi
+
+    rm -rf /var/log/leshy-controller
+    rm -rf /opt/leshy-controller
+  ;;
+esac
+
+exit 0
