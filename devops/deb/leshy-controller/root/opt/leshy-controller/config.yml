@@ -1,0 +1,9 @@
+debug: false
+bpf_program_path: ./bpf/l4_filter.o
+bpf_pin_path: /sys/fs/bpf
+db_path: ./leshy-controller.db
+management_bootstrap_token: "change-me-please"
+api_listen_addr: 0.0.0.0:9090
+shutdown_timeout_sec: 10
+crt_path: ./server.crt
+key_path: ./server.key
