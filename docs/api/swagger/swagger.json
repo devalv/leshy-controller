@@ -1,0 +1,571 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "API для управления настройками и временным доступом к защищенным портам.",
+        "title": "leshy-controller REST API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/api/v1",
+    "paths": {
+        "/allow": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Добавляет временную авторизацию IP+порт для доступа к защищенному порту.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "filter"
+                ],
+                "summary": "Разрешить временный доступ к защищенному порту",
+                "parameters": [
+                    {
+                        "description": "Allow request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v1.AllowRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.AllowResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid JSON or validation error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "allow failed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "filter is not configured",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/management/block": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Очищает pending и active flow авторизации, созданные через /allow.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "management"
+                ],
+                "summary": "Экстренно заблокировать все разрешения",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.BlockManagementResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to block all connections",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "filter is not configured or authorization unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/management/settings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Возвращает текущие настройки управления и runtime-статус.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "management"
+                ],
+                "summary": "Получить management settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.GetManagementSettingsResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "management settings not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to get management settings",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Authorization is unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BootstrapAuth": []
+                    }
+                ],
+                "description": "Первичная конфигурация управления через bootstrap-токен.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "management"
+                ],
+                "summary": "Создать management settings (bootstrap)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bootstrap token",
+                        "name": "X-Bootstrap-Token",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Management settings payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v1.UpsertManagementSettingsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.UpsertManagementSettingsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid JSON or validation error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "409": {
+                        "description": "management settings are locked",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to save management settings",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "management bootstrap is not configured",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Обновляет уже сохраненные настройки управления.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "management"
+                ],
+                "summary": "Обновить management settings",
+                "parameters": [
+                    {
+                        "description": "Management settings payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v1.UpsertManagementSettingsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.UpsertManagementSettingsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid JSON or validation error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "409": {
+                        "description": "management settings are not configured",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to update management settings",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Authorization is unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Возвращает статистику разрешенных и заблокированных пакетов.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "filter"
+                ],
+                "summary": "Показать статистику фильтра",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.StatsResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to get stats",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Authorization is unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "v1.AllowRequest": {
+            "type": "object",
+            "properties": {
+                "ip": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.AllowResponse": {
+            "type": "object",
+            "properties": {
+                "expires": {
+                    "description": "RFC3339 (UTC)",
+                    "type": "string"
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.BlockManagementResponse": {
+            "type": "object",
+            "properties": {
+                "active_flows_removed": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "pending_entries_removed": {
+                    "type": "integer"
+                },
+                "runtime_attached": {
+                    "type": "boolean"
+                },
+                "runtime_iface": {
+                    "type": "string"
+                }
+            }
+        },
+        "v1.GetManagementSettingsResponse": {
+            "type": "object",
+            "properties": {
+                "audience": {
+                    "type": "string"
+                },
+                "auth_configured": {
+                    "type": "boolean"
+                },
+                "guarded_ports_range": {
+                    "type": "string"
+                },
+                "handshake_window_sec": {
+                    "type": "integer"
+                },
+                "iface": {
+                    "type": "string"
+                },
+                "inactive_timer_sec": {
+                    "type": "integer"
+                },
+                "issuer": {
+                    "type": "string"
+                },
+                "jwks_url": {
+                    "type": "string"
+                },
+                "required_scope": {
+                    "type": "string"
+                },
+                "runtime_attached": {
+                    "type": "boolean"
+                },
+                "runtime_iface": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "RFC3339 (UTC)",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.StatsResponse": {
+            "type": "object",
+            "properties": {
+                "active_flow_hits": {
+                    "type": "integer"
+                },
+                "allow_rate_percent": {
+                    "type": "number"
+                },
+                "allowed": {
+                    "type": "integer"
+                },
+                "drop_rate_percent": {
+                    "type": "number"
+                },
+                "dropped": {
+                    "type": "integer"
+                },
+                "guarded_port_dropped": {
+                    "type": "integer"
+                },
+                "ip_port_auth_hits": {
+                    "type": "integer"
+                },
+                "non_guarded_port_allowed": {
+                    "type": "integer"
+                },
+                "pending_expired_cleanups": {
+                    "type": "integer"
+                },
+                "pending_promotions": {
+                    "type": "integer"
+                },
+                "syn_allowed": {
+                    "type": "integer"
+                },
+                "syn_dropped": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.UpsertManagementSettingsRequest": {
+            "type": "object",
+            "properties": {
+                "audience": {
+                    "type": "string"
+                },
+                "guarded_ports_range": {
+                    "type": "string"
+                },
+                "handshake_window_sec": {
+                    "type": "integer"
+                },
+                "iface": {
+                    "type": "string"
+                },
+                "inactive_timer_sec": {
+                    "type": "integer"
+                },
+                "issuer": {
+                    "type": "string"
+                },
+                "jwks_url": {
+                    "type": "string"
+                },
+                "required_scope": {
+                    "type": "string"
+                }
+            }
+        },
+        "v1.UpsertManagementSettingsResponse": {
+            "type": "object",
+            "properties": {
+                "audience": {
+                    "type": "string"
+                },
+                "auth_configured": {
+                    "type": "boolean"
+                },
+                "guarded_ports_range": {
+                    "type": "string"
+                },
+                "handshake_window_sec": {
+                    "type": "integer"
+                },
+                "iface": {
+                    "type": "string"
+                },
+                "inactive_timer_sec": {
+                    "type": "integer"
+                },
+                "issuer": {
+                    "type": "string"
+                },
+                "jwks_url": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "required_scope": {
+                    "type": "string"
+                },
+                "runtime_attached": {
+                    "type": "boolean"
+                },
+                "runtime_iface": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "RFC3339 (UTC)",
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        },
+        "BootstrapAuth": {
+            "type": "apiKey",
+            "name": "X-Bootstrap-Token",
+            "in": "header"
+        }
+    }
+}

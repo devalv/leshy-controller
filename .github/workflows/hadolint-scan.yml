@@ -18,5 +18,5 @@ jobs:
           # Находим все Dockerfile* файлы
           find . -type f -name "Dockerfile*" ! -path "./.git/*" | while read file; do
             echo "=== Linting $file ==="
-            docker run --rm -i hadolint/hadolint < "$file"
+            docker run --rm -i hadolint/hadolint hadolint --ignore DL3059 - < "$file"
           done

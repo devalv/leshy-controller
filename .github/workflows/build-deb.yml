@@ -1,0 +1,45 @@
+name: Build leshy-controller deb package
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Для загрузки артефактов в релиз
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Полная история для тегов
+
+    - name: Extract version from release tag
+      run: |
+        # Извлекаем имя тега релиза (например, refs/tags/v0.1.0)
+        TAG_NAME="${{ github.ref }}"
+        # Удаляем префикс refs/tags/
+        TAG_NAME="${TAG_NAME#refs/tags/}"
+        # Удаляем префикс v из версии (v0.1.0 -> 0.1.0)
+        VERSION="${TAG_NAME#v}"
+        echo "PACKAGE_VERSION=$VERSION" >> $GITHUB_ENV
+        echo "Extracted version: $VERSION"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image and extract artifact
+      run: |
+        chmod +x ${{ github.workspace }}/devops/build-deb.sh
+        ${{ github.workspace }}/devops/build-deb.sh
+      env:
+        PACKAGE_VERSION: ${{ env.PACKAGE_VERSION }}
+
+    - name: Upload artifact to GitHub Releases (if triggered by release)
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ./leshy-controller_${{ env.PACKAGE_VERSION }}_amd64.deb
+        token: ${{ secrets.GITHUB_TOKEN }}

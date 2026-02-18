@@ -1,0 +1,371 @@
+basePath: /api/v1
+definitions:
+  v1.AllowRequest:
+    properties:
+      ip:
+        type: string
+      port:
+        type: integer
+    type: object
+  v1.AllowResponse:
+    properties:
+      expires:
+        description: RFC3339 (UTC)
+        type: string
+      ip:
+        type: string
+      message:
+        type: string
+      port:
+        type: integer
+    type: object
+  v1.BlockManagementResponse:
+    properties:
+      active_flows_removed:
+        type: integer
+      message:
+        type: string
+      pending_entries_removed:
+        type: integer
+      runtime_attached:
+        type: boolean
+      runtime_iface:
+        type: string
+    type: object
+  v1.GetManagementSettingsResponse:
+    properties:
+      audience:
+        type: string
+      auth_configured:
+        type: boolean
+      guarded_ports_range:
+        type: string
+      handshake_window_sec:
+        type: integer
+      iface:
+        type: string
+      inactive_timer_sec:
+        type: integer
+      issuer:
+        type: string
+      jwks_url:
+        type: string
+      required_scope:
+        type: string
+      runtime_attached:
+        type: boolean
+      runtime_iface:
+        type: string
+      updated_at:
+        description: RFC3339 (UTC)
+        type: string
+    type: object
+  v1.StatsResponse:
+    properties:
+      active_flow_hits:
+        type: integer
+      allow_rate_percent:
+        type: number
+      allowed:
+        type: integer
+      drop_rate_percent:
+        type: number
+      dropped:
+        type: integer
+      guarded_port_dropped:
+        type: integer
+      ip_port_auth_hits:
+        type: integer
+      non_guarded_port_allowed:
+        type: integer
+      pending_expired_cleanups:
+        type: integer
+      pending_promotions:
+        type: integer
+      syn_allowed:
+        type: integer
+      syn_dropped:
+        type: integer
+    type: object
+  v1.UpsertManagementSettingsRequest:
+    properties:
+      audience:
+        type: string
+      guarded_ports_range:
+        type: string
+      handshake_window_sec:
+        type: integer
+      iface:
+        type: string
+      inactive_timer_sec:
+        type: integer
+      issuer:
+        type: string
+      jwks_url:
+        type: string
+      required_scope:
+        type: string
+    type: object
+  v1.UpsertManagementSettingsResponse:
+    properties:
+      audience:
+        type: string
+      auth_configured:
+        type: boolean
+      guarded_ports_range:
+        type: string
+      handshake_window_sec:
+        type: integer
+      iface:
+        type: string
+      inactive_timer_sec:
+        type: integer
+      issuer:
+        type: string
+      jwks_url:
+        type: string
+      message:
+        type: string
+      required_scope:
+        type: string
+      runtime_attached:
+        type: boolean
+      runtime_iface:
+        type: string
+      updated_at:
+        description: RFC3339 (UTC)
+        type: string
+    type: object
+info:
+  contact: {}
+  description: API для управления настройками и временным доступом к защищенным портам.
+  title: leshy-controller REST API
+  version: "1.0"
+paths:
+  /allow:
+    post:
+      consumes:
+      - application/json
+      description: Добавляет временную авторизацию IP+порт для доступа к защищенному
+        порту.
+      parameters:
+      - description: Allow request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.AllowRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.AllowResponse'
+        "400":
+          description: Invalid JSON or validation error
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: allow failed
+          schema:
+            type: string
+        "503":
+          description: filter is not configured
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Разрешить временный доступ к защищенному порту
+      tags:
+      - filter
+  /management/block:
+    post:
+      description: Очищает pending и active flow авторизации, созданные через /allow.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.BlockManagementResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: failed to block all connections
+          schema:
+            type: string
+        "503":
+          description: filter is not configured or authorization unavailable
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Экстренно заблокировать все разрешения
+      tags:
+      - management
+  /management/settings:
+    get:
+      description: Возвращает текущие настройки управления и runtime-статус.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.GetManagementSettingsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: management settings not found
+          schema:
+            type: string
+        "500":
+          description: failed to get management settings
+          schema:
+            type: string
+        "503":
+          description: Authorization is unavailable
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Получить management settings
+      tags:
+      - management
+    patch:
+      consumes:
+      - application/json
+      description: Обновляет уже сохраненные настройки управления.
+      parameters:
+      - description: Management settings payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.UpsertManagementSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.UpsertManagementSettingsResponse'
+        "400":
+          description: Invalid JSON or validation error
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "409":
+          description: management settings are not configured
+          schema:
+            type: string
+        "500":
+          description: failed to update management settings
+          schema:
+            type: string
+        "503":
+          description: Authorization is unavailable
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Обновить management settings
+      tags:
+      - management
+    post:
+      consumes:
+      - application/json
+      description: Первичная конфигурация управления через bootstrap-токен.
+      parameters:
+      - description: Bootstrap token
+        in: header
+        name: X-Bootstrap-Token
+        required: true
+        type: string
+      - description: Management settings payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.UpsertManagementSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.UpsertManagementSettingsResponse'
+        "400":
+          description: Invalid JSON or validation error
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "409":
+          description: management settings are locked
+          schema:
+            type: string
+        "500":
+          description: failed to save management settings
+          schema:
+            type: string
+        "503":
+          description: management bootstrap is not configured
+          schema:
+            type: string
+      security:
+      - BootstrapAuth: []
+      summary: Создать management settings (bootstrap)
+      tags:
+      - management
+  /stats:
+    get:
+      description: Возвращает статистику разрешенных и заблокированных пакетов.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.StatsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: failed to get stats
+          schema:
+            type: string
+        "503":
+          description: Authorization is unavailable
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Показать статистику фильтра
+      tags:
+      - filter
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+  BootstrapAuth:
+    in: header
+    name: X-Bootstrap-Token
+    type: apiKey
+swagger: "2.0"

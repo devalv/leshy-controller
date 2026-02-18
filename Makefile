@@ -1,3 +1,5 @@
+SWAG_VERSION ?= v1.16.4
+
 setup:
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install mvdan.cc/gofumpt@latest
@@ -33,10 +35,26 @@ build:
 build-cbpf:
 	./devops/build.sh
 
+build-deb:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make build-deb VERSION=1.2.3"; \
+		exit 1; \
+	fi
+	PACKAGE_VERSION="$(VERSION)" ./devops/build-deb.sh
+
 run:
 	go run ./cmd --config ./config.yml
 
 clean:
 	docker system prune -f
 
-.PHONY: setup fmt test build cover github-build run clean
+swagger:
+	mkdir -p docs/api/swagger
+	docker run --rm \
+		--user $$(id -u):$$(id -g) \
+		-v $(PWD):/app \
+		-w /app \
+		golang:1.25-alpine \
+		sh -c "export GOCACHE=/tmp/go-build GOPATH=/tmp/go GOMODCACHE=/tmp/go/pkg/mod && go install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION) && /tmp/go/bin/swag init --generalInfo swagger_info.go --dir internal/interfaces/rest/v1,internal/contracts/rest/v1 --output docs/api/swagger --outputTypes json,yaml --parseInternal --generatedTime=false"
+
+.PHONY: setup fmt test build cover github-build run clean swagger build-deb

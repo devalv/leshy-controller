@@ -1,0 +1,96 @@
+name: coverage-badge
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - '.github/workflows/coverage-badge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  coverage:
+    name: update coverage badge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Calculate coverage
+        id: coverage
+        run: |
+          set -euo pipefail
+          make cover | tee /tmp/coverage.log
+
+          coverage="$(awk '/^total:/ { gsub("%", "", $3); print $3 }' /tmp/coverage.log | tail -n 1)"
+          if [ -z "${coverage}" ]; then
+            echo "failed to parse coverage from make cover output"
+            exit 1
+          fi
+
+          echo "value=${coverage}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate coverage badge
+        env:
+          COVERAGE_VALUE: ${{ steps.coverage.outputs.value }}
+        run: |
+          set -euo pipefail
+
+          color_hex="$(awk -v c="${COVERAGE_VALUE}" 'BEGIN {
+            if (c >= 85) print "#4c1";
+            else if (c >= 70) print "#97CA00";
+            else if (c >= 50) print "#dfb317";
+            else if (c >= 30) print "#fe7d37";
+            else print "#e05d44";
+          }')"
+
+          mkdir -p docs/badges
+          cat > docs/badges/coverage.svg <<EOF
+          <svg xmlns="http://www.w3.org/2000/svg" width="122" height="20" role="img" aria-label="coverage: ${COVERAGE_VALUE}%">
+            <linearGradient id="s" x2="0" y2="100%">
+              <stop offset="0" stop-color="#fff" stop-opacity=".7"/>
+              <stop offset=".1" stop-color="#aaa" stop-opacity=".1"/>
+              <stop offset=".9" stop-color="#000" stop-opacity=".3"/>
+              <stop offset="1" stop-color="#000" stop-opacity=".5"/>
+            </linearGradient>
+            <clipPath id="r">
+              <rect width="122" height="20" rx="3" fill="#fff"/>
+            </clipPath>
+            <g clip-path="url(#r)">
+              <rect width="68" height="20" fill="#555"/>
+              <rect x="68" width="54" height="20" fill="${color_hex}"/>
+              <rect width="122" height="20" fill="url(#s)"/>
+            </g>
+            <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">
+              <text x="34" y="15" fill="#010101" fill-opacity=".3">coverage</text>
+              <text x="34" y="14">coverage</text>
+              <text x="95" y="15" fill="#010101" fill-opacity=".3">${COVERAGE_VALUE}%</text>
+              <text x="95" y="14">${COVERAGE_VALUE}%</text>
+            </g>
+          </svg>
+          EOF
+
+      - name: Commit and push badge
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- docs/badges/coverage.svg; then
+            echo "badge has no changes"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/badges/coverage.svg
+          git commit -m "chore(ci): update coverage badge [skip ci]"
+          git push

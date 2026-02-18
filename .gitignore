@@ -42,4 +42,4 @@ config.yml
 # Build artifacts
 l4_filter.o
 controller-app
-leshy-controller
+*.deb
