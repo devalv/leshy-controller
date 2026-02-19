@@ -8,9 +8,6 @@ import (
 	"net"
 	"strings"
 
-	"github.com/devalv/leshy-controller/internal/application/filter"
-	"github.com/devalv/leshy-controller/internal/application/management"
-	grpcv1 "github.com/devalv/leshy-controller/internal/contracts/grpc/v1"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -19,6 +16,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/devalv/leshy-controller/internal/application/filter"
+	"github.com/devalv/leshy-controller/internal/application/management"
+	grpcv1 "github.com/devalv/leshy-controller/internal/contracts/grpc/v1"
 )
 
 const (
@@ -547,7 +548,7 @@ func metadataValue(ctx context.Context, key string) string {
 	return ""
 }
 
-func logMutationRequestSource(ctx context.Context, operation string, fullMethod string) {
+func logMutationRequestSource(ctx context.Context, operation, fullMethod string) {
 	log.Info().
 		Str("operation", operation).
 		Str("method", "gRPC").
@@ -556,7 +557,7 @@ func logMutationRequestSource(ctx context.Context, operation string, fullMethod 
 		Msg("Mutation request source recorded")
 }
 
-func logMutationAuthError(ctx context.Context, operation string, fullMethod string) {
+func logMutationAuthError(ctx context.Context, operation, fullMethod string) {
 	log.Warn().
 		Str("operation", operation).
 		Str("method", "gRPC").

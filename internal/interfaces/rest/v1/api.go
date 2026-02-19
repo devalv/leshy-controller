@@ -9,10 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/devalv/leshy-controller/internal/application/filter"
 	"github.com/devalv/leshy-controller/internal/application/management"
 	restv1 "github.com/devalv/leshy-controller/internal/contracts/rest/v1"
-	"github.com/rs/zerolog/log"
 )
 
 type Deps struct {

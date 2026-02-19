@@ -8,10 +8,10 @@ setup:
 
 fmt:
 	go mod tidy
-	gofmt -w -s ./cmd ./internal
-	gofumpt -w ./cmd ./internal
-	goimports -w ./cmd ./internal
-	golangci-lint run --fix
+	#gofmt -w -s ./cmd ./internal
+	#gofumpt -w ./cmd ./internal
+	#goimports -w ./cmd ./internal
+	golangci-lint run --fix ./cmd/... ./internal/...
 
 test:
 	docker run --rm \

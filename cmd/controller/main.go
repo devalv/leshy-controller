@@ -7,9 +7,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/devalv/leshy-controller/internal/bootstrap"
 	"github.com/devalv/leshy-controller/internal/config"
-	"github.com/rs/zerolog/log"
 )
 
 func main() {

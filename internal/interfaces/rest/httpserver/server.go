@@ -16,7 +16,7 @@ type Server struct {
 	name string
 }
 
-func New(addr string, crtPath string, keyPath string, handler http.Handler) *Server {
+func New(addr, crtPath, keyPath string, handler http.Handler) *Server {
 	if handler == nil {
 		handler = DefaultNotFoundHandler()
 	}

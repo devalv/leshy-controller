@@ -28,7 +28,7 @@ type Server struct {
 }
 
 // New создает новый gRPC сервер.
-func New(addr string, crtPath string, keyPath string, register Registrar) *Server {
+func New(addr, crtPath, keyPath string, register Registrar) *Server {
 	return &Server{
 		name:     "grpc-api:" + addr,
 		addr:     addr,

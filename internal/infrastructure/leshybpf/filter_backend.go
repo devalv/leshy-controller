@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
-	"github.com/devalv/leshy-controller/internal/application/filter"
 	"github.com/rs/zerolog/log"
+
+	"github.com/devalv/leshy-controller/internal/application/filter"
 )
 
 type FilterBackend struct {

@@ -11,6 +11,8 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 
+	"google.golang.org/grpc"
+
 	"github.com/devalv/leshy-controller/internal/application/filter"
 	"github.com/devalv/leshy-controller/internal/application/management"
 	"github.com/devalv/leshy-controller/internal/config"
@@ -24,7 +26,6 @@ import (
 	restrouter "github.com/devalv/leshy-controller/internal/interfaces/rest/router"
 	v1 "github.com/devalv/leshy-controller/internal/interfaces/rest/v1"
 	"github.com/devalv/leshy-controller/internal/runtime"
-	"google.golang.org/grpc"
 )
 
 func New(ctx context.Context, cfg *config.Config) (*runtime.Application, error) {

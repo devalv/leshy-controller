@@ -13,8 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/devalv/leshy-controller/internal/application/management"
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/devalv/leshy-controller/internal/application/management"
 )
 
 const (
