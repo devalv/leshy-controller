@@ -35,11 +35,10 @@ formatters:
     goimports:
       local-prefixes:
         - github.com/devalv/leshy-controller
+  exclusions:
+    paths:
+      - ".*\\.pb\\.go"  # Exclude protobuf generated files
 
 run:
   timeout: 5m
   tests: false
-
-issues:
-  exclude-dirs:
-    - internal/contracts/grpc
