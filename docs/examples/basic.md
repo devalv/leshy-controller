@@ -1,30 +1,25 @@
 # Примеры
 
-
 ## 1. Подготовка bootstrap-токена
 
-1. Сгенерируйте криптографически стойкий токен (пример):
+1. Сгенерируйте криптографически стойкий токен:
 ```bash
 openssl rand -base64 48 | tr '+/' '-_' | tr -d '='
 ```
-2. Запишите токен в конфиг приложения (`config.yml`):
-```yaml
-management_bootstrap_token: "REPLACE_WITH_RANDOM_TOKEN"
-```
-
-3. Сгенерируйте самоподписанные TLS-сертификаты, если нет готовых
+2. Сгенерируйте TLS-сертификаты (если нет готовых):
 ```bash
 openssl req -newkey rsa:2048 -nodes -keyout server.key -x509 -days 365 -out server.crt
 ```
-
-4. Запишите путь в конфиг приложения (`config.yml`):
+3. Запишите значения в `config.yml`:
 ```yaml
+management_bootstrap_token: "REPLACE_WITH_RANDOM_TOKEN"
+api_listen_addr: 0.0.0.0:9090
+api_server_mode: http # или grpc
 crt_path: ./server.crt
 key_path: ./server.key
 ```
-
-3. Защитите файл конфига правами доступа только для пользователя сервиса.
-4. Запустите приложение.
+4. Защитите файл конфига правами доступа только для пользователя сервиса.
+5. Запустите приложение.
 
 ## 2. Что должна сделать внешняя система
 
@@ -42,33 +37,29 @@ key_path: ./server.key
   ]
 }
 ```
-3. Определить постоянные значения `issuer`, `audience`, `required_scope` для вашей интеграции.
-4. Реализовать выдачу короткоживущих JWT (рекомендуемо 5-15 минут) с header `kid` и claims:
+3. Определить `issuer`, `audience`, `required_scope`.
+4. Выдавать короткоживущие JWT (рекомендуемо 5-15 минут) с `kid` и claims:
 `iss`, `aud`, `exp`, `nbf`, `iat`, `scope` (должен содержать `required_scope`), желательно `jti`.
 
-### 2.1 Доверие к TLS-сертификату JWKS (важно для стенда)
+### 2.1 Доверие к TLS-сертификату JWKS
 
-`leshy-controller` забирает JWKS через стандартный `net/http` клиент Go и проверяет TLS-цепочку по системному trust store хоста, где запущен контроллер.
+`leshy-controller` проверяет TLS-цепочку JWKS по системному trust store хоста.
 
-Это значит:
-1. `jwks_url` должен быть `https://...` с валидным сертификатом и корректным именем хоста (SAN/CN).
-2. Самоподписанный сертификат без доверенной CA приведет к ошибке загрузки JWKS (`authorization unavailable` / `failed to save management settings`).
-3. Для тестового стенда используйте один из вариантов:
-   - выпустить сертификат от внутренней/публичной CA, которой доверяет ОС;
-   - добавить вашу тестовую CA в системный trust store узла с `leshy-controller`;
-   - для локального dev использовать `mkcert` и установить локальную CA в trust store.
+Требования:
+1. `jwks_url` должен быть `https://...` и сертификат должен быть валиден для хоста.
+2. Самоподписанный сертификат без доверенной CA приведет к ошибке загрузки JWKS.
+3. Для стенда:
+   - используйте сертификат от доверенной CA;
+   - или добавьте тестовую CA в trust store узла с `leshy-controller`;
+   - или используйте `mkcert` и установите локальную CA в trust store.
 
+## 3. HTTP режим (`api_server_mode: http`)
 
-### 2.2 Пошаговый пример для stub-auth как подключить внешний auth-сервис
+### 3.1 Первичная конфигурация (`POST /api/v1/management/settings`)
 
-[GitHub Gist](https://gist.github.com/devalv/33998fbcf2d1ae3ba53c835340ba3614)
-
-
-## 3. Первичная конфигурация приложения (`/api/v1/management/settings`)
-
-Выполнить единоразовую настройку:
 ```bash
-curl -X POST "http://<host>:9090/api/v1/management/settings" \
+curl -X POST "https://<host>:9090/api/v1/management/settings" \
+  -k \
   -H "Content-Type: application/json" \
   -H "X-Bootstrap-Token: REPLACE_WITH_RANDOM_TOKEN" \
   -d '{
@@ -82,47 +73,22 @@ curl -X POST "http://<host>:9090/api/v1/management/settings" \
     "inactive_timer_sec": 300
   }'
 ```
-Пример успешного ответа:
-```json
-{
-  "message": "Management settings saved",
-  "auth_configured": true,
-  "runtime_attached": true,
-  "runtime_iface": "ens18",
-  "issuer": "https://auth.example.com",
-  "audience": "leshy-controller",
-  "jwks_url": "https://auth.example.com/.well-known/jwks.json",
-  "required_scope": "allow:write",
-  "guarded_ports_range": "3389-3390",
-  "iface": "ens18",
-  "handshake_window_sec": 600,
-  "inactive_timer_sec": 300,
-  "updated_at": "2026-02-11T12:00:00Z"
-}
-```
 
-Успешный http-запрос в ответе получит статус 200.
+### 3.2 Вызов `/allow`
 
-Пояснение по runtime-параметрам:
-- `handshake_window_sec` — окно действия временной авторизации из `/allow` (pending).
-- `inactive_timer_sec` — TTL неактивности для `active_flows`; при трафике по активному flow TTL продлевается.
-
-## 4. Вызов `/allow` из внешней системы
-
-1. Внешняя система выпускает JWT приватным ключом `Ed25519`.
-2. Отправляет запрос:
 ```bash
-curl -X POST "http://<host>:9090/api/v1/allow" \
+curl -X POST "https://<host>:9090/api/v1/allow" \
+  -k \
   -H "Authorization: Bearer <JWT_ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"ip":"203.0.113.10","port":3389}'
 ```
 
-## 5. Обновление настроек (`PATCH /api/v1/management/settings`)
+### 3.3 Обновление настроек (`PATCH /api/v1/management/settings`)
 
-Для изменения уже сохраненных настроек используйте `PATCH` и тот же access token, что используется для `/allow`:
 ```bash
-curl -X PATCH "http://<host>:9090/api/v1/management/settings" \
+curl -X PATCH "https://<host>:9090/api/v1/management/settings" \
+  -k \
   -H "Authorization: Bearer <JWT_ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -136,27 +102,102 @@ curl -X PATCH "http://<host>:9090/api/v1/management/settings" \
     "inactive_timer_sec": 300
   }'
 ```
-Примечание: сейчас `PATCH` ожидает полный объект settings (не partial update).
 
-## 6. Экстренная блокировка (`POST /api/v1/management/block`)
+Примечание: `PATCH` ожидает полный объект settings (не partial update).
 
-Ручка очищает все разрешения, ранее выданные через `/allow`:
-- удаляет записи из `pending`;
-- удаляет записи из `active_flows`.
+### 3.4 Экстренная блокировка (`POST /api/v1/management/block`)
 
-Запрос:
 ```bash
-curl -X POST "http://<host>:9090/api/v1/management/block" \
+curl -X POST "https://<host>:9090/api/v1/management/block" \
+  -k \
   -H "Authorization: Bearer <JWT_ACCESS_TOKEN>"
 ```
 
-Пример успешного ответа:
-```json
-{
-  "message": "All allow rules were flushed",
-  "pending_entries_removed": 3,
-  "active_flows_removed": 2,
-  "runtime_attached": true,
-  "runtime_iface": "ens18"
-}
+## 4. gRPC режим (`api_server_mode: grpc`)
+
+Используется тот же контракт: `docs/api/grpc/leshy_controller_v1.proto`.
+
+Примеры ниже для self-signed TLS (`-insecure`). Для доверенного сертификата уберите `-insecure`.
+
+### 4.1 Первичная конфигурация (`ManagementService/CreateSettings`)
+
+```bash
+grpcurl -insecure \
+  -import-path docs/api/grpc \
+  -proto leshy_controller_v1.proto \
+  -H 'x-bootstrap-token: REPLACE_WITH_RANDOM_TOKEN' \
+  -d '{
+    "issuer": "https://auth.example.com",
+    "audience": "leshy-controller",
+    "jwks_url": "https://auth.example.com/.well-known/jwks.json",
+    "required_scope": "allow:write",
+    "guarded_ports_range": "3389-3390",
+    "iface": "ens18",
+    "handshake_window_sec": 600,
+    "inactive_timer_sec": 300
+  }' \
+  <host>:9090 \
+  leshy.controller.v1.ManagementService/CreateSettings
 ```
+
+### 4.2 Разрешение подключения (`FilterService/Allow`)
+
+```bash
+grpcurl -insecure \
+  -import-path docs/api/grpc \
+  -proto leshy_controller_v1.proto \
+  -H 'authorization: Bearer <JWT_ACCESS_TOKEN>' \
+  -d '{"ip":"203.0.113.10","port":3389}' \
+  <host>:9090 \
+  leshy.controller.v1.FilterService/Allow
+```
+
+### 4.3 Просмотр статистики (`FilterService/Stats`)
+
+```bash
+grpcurl -insecure \
+  -import-path docs/api/grpc \
+  -proto leshy_controller_v1.proto \
+  -H 'authorization: Bearer <JWT_ACCESS_TOKEN>' \
+  -d '{}' \
+  <host>:9090 \
+  leshy.controller.v1.FilterService/Stats
+```
+
+### 4.4 Обновление настроек (`ManagementService/UpdateSettings`)
+
+```bash
+grpcurl -insecure \
+  -import-path docs/api/grpc \
+  -proto leshy_controller_v1.proto \
+  -H 'authorization: Bearer <JWT_ACCESS_TOKEN>' \
+  -d '{
+    "issuer": "https://auth.example.com",
+    "audience": "leshy-controller",
+    "jwks_url": "https://auth.example.com/.well-known/jwks.json",
+    "required_scope": "allow:write",
+    "guarded_ports_range": "3389-3395",
+    "iface": "ens18",
+    "handshake_window_sec": 900,
+    "inactive_timer_sec": 300
+  }' \
+  <host>:9090 \
+  leshy.controller.v1.ManagementService/UpdateSettings
+```
+
+### 4.5 Экстренная блокировка (`ManagementService/Block`)
+
+```bash
+grpcurl -insecure \
+  -import-path docs/api/grpc \
+  -proto leshy_controller_v1.proto \
+  -H 'authorization: Bearer <JWT_ACCESS_TOKEN>' \
+  -d '{}' \
+  <host>:9090 \
+  leshy.controller.v1.ManagementService/Block
+```
+
+## 5. Пояснение по runtime-параметрам
+
+- `handshake_window_sec` — окно действия временной авторизации из `/allow` (pending).
+- `inactive_timer_sec` — TTL неактивности для `active_flows`; при трафике по активному flow TTL продлевается.

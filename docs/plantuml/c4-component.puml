@@ -17,6 +17,13 @@ Container_Boundary(rest_boundary, "REST API container (interfaces/rest/v1)") {
   Component(h_block, "Block handler", "POST /management/block", "Flushes allow-related runtime state")
 }
 
+Container_Boundary(grpc_boundary, "gRPC API container (interfaces/grpc/v1)") {
+  Component(g_settings, "ManagementService", "CreateSettings/UpdateSettings/GetSettings", "Bootstrap and Bearer auth via gRPC metadata")
+  Component(g_allow, "FilterService.Allow", "Allow(ip, port)", "Temporary access grant")
+  Component(g_stats, "FilterService.Stats", "Stats()", "Filter counters and rates")
+  Component(g_block, "ManagementService.Block", "Block()", "Flushes allow-related runtime state")
+}
+
 Component_Ext(mgmt_svc, "management.Service", "Application", "Settings validation, bootstrap auth, JWT authorization")
 Component_Ext(filter_svc, "filter.Service", "Application", "allow/stats/block orchestration")
 Component_Ext(repo, "sqlite.ManagementSettingsRepository", "Infrastructure", "Raw SQL settings persistence")
@@ -25,11 +32,19 @@ Component_Ext(applier, "leshybpf.RuntimeSettingsApplier", "Infrastructure", "Att
 Component_Ext(backend, "leshybpf.FilterBackend", "Infrastructure", "Map operations for allow/stats/block")
 
 Rel(ext_admin, auth_mw, "Calls protected REST endpoints")
+Rel(ext_admin, g_settings, "Calls protected gRPC endpoints")
+Rel(ext_admin, g_allow, "Calls protected gRPC endpoints")
+Rel(ext_admin, g_stats, "Calls protected gRPC endpoints")
+Rel(ext_admin, g_block, "Calls protected gRPC endpoints")
 Rel(auth_mw, mgmt_svc, "AuthorizeAllow(token)")
 Rel(h_settings, mgmt_svc, "SaveSettings, UpdateSettings, GetSettings")
 Rel(h_allow, filter_svc, "Allow(ip, port)")
 Rel(h_stats, filter_svc, "Stats()")
 Rel(h_block, filter_svc, "BlockAll()")
+Rel(g_settings, mgmt_svc, "SaveSettings, UpdateSettings, GetSettings")
+Rel(g_allow, filter_svc, "Allow(ip, port)")
+Rel(g_stats, filter_svc, "Stats()")
+Rel(g_block, filter_svc, "BlockAll()")
 
 Rel(mgmt_svc, repo, "Load/Save settings")
 Rel(repo, settings_db, "Read/Write")

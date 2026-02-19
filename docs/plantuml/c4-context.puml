@@ -19,7 +19,7 @@ System_Boundary(leshy_boundary, "leshy-controller") {
 Rel(user, client, "Uses")
 Rel(client, dispatcher, "Requests connection parameters")
 Rel(admin, dispatcher, "Configures access policies")
-Rel(dispatcher, leshy, "Calls REST API (/management/*, /allow, /stats)")
+Rel(dispatcher, leshy, "Calls REST or gRPC API (depends on api_server_mode)")
 Rel(dispatcher, proxy, "Configures forwarding rules")
 Rel(client, proxy, "Connects to remote session through gateway")
 Rel(proxy, remote, "Forwards traffic")

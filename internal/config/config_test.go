@@ -331,6 +331,67 @@ func TestValidateAPIListenAddr(t *testing.T) {
 	}
 }
 
+func TestValidateAPIServerMode(t *testing.T) {
+	tests := []struct {
+		name        string
+		mode        string
+		wantMode    string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:     "http mode",
+			mode:     "http",
+			wantMode: APIServerModeHTTP,
+		},
+		{
+			name:     "grpc mode",
+			mode:     "grpc",
+			wantMode: APIServerModeGRPC,
+		},
+		{
+			name:     "uppercase normalized",
+			mode:     "HTTP",
+			wantMode: APIServerModeHTTP,
+		},
+		{
+			name:        "empty mode",
+			mode:        "",
+			wantErr:     true,
+			errContains: "must be",
+		},
+		{
+			name:        "invalid mode",
+			mode:        "rest",
+			wantErr:     true,
+			errContains: "must be",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mode, err := validateAPIServerMode(tt.mode)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+					t.Fatalf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if mode != tt.wantMode {
+				t.Fatalf("mode = %q, want %q", mode, tt.wantMode)
+			}
+		})
+	}
+}
+
 // Tests for Config.Validate
 
 func TestConfigValidate(t *testing.T) {
@@ -374,6 +435,7 @@ func TestConfigValidate(t *testing.T) {
 				BPFPinPath:         tmpDir,
 				SettingsDBPath:     validSettingsDB,
 				APIListenAddr:      "127.0.0.1:9090",
+				APIServerMode:      APIServerModeHTTP,
 				ShutdownTimeoutSec: 5,
 				CrtPath:            validCertFile,
 				KeyPath:            validKeyFile,
@@ -386,13 +448,14 @@ func TestConfigValidate(t *testing.T) {
 				BPFProgramPath:     "",
 				BPFPinPath:         "",
 				APIListenAddr:      "invalid",
+				APIServerMode:      "",
 				ShutdownTimeoutSec: 0,
 				SettingsDBPath:     "",
 				CrtPath:            "",
 				KeyPath:            "",
 			},
 			wantErr:  true,
-			errCount: 7, // all validated fields invalid
+			errCount: 8, // all validated fields invalid
 		},
 		{
 			name: "invalid BPF path only",
@@ -400,6 +463,7 @@ func TestConfigValidate(t *testing.T) {
 				BPFProgramPath:     "",
 				BPFPinPath:         tmpDir,
 				APIListenAddr:      "127.0.0.1:9090",
+				APIServerMode:      APIServerModeHTTP,
 				ShutdownTimeoutSec: 5,
 				SettingsDBPath:     validSettingsDB,
 				CrtPath:            validCertFile,
@@ -414,6 +478,7 @@ func TestConfigValidate(t *testing.T) {
 				BPFProgramPath:     validBPF,
 				BPFPinPath:         tmpDir,
 				APIListenAddr:      "127.0.0.1:9090",
+				APIServerMode:      APIServerModeHTTP,
 				ShutdownTimeoutSec: 61, // > 61 secs
 				SettingsDBPath:     validSettingsDB,
 				CrtPath:            validCertFile,
@@ -428,6 +493,7 @@ func TestConfigValidate(t *testing.T) {
 				BPFProgramPath:     validBPF,
 				BPFPinPath:         tmpDir,
 				APIListenAddr:      "127.0.0.1:9090",
+				APIServerMode:      APIServerModeHTTP,
 				ShutdownTimeoutSec: 5,
 				SettingsDBPath:     "", // bad path
 				CrtPath:            validCertFile,
@@ -442,6 +508,7 @@ func TestConfigValidate(t *testing.T) {
 				BPFProgramPath:     validBPF,
 				BPFPinPath:         tmpDir,
 				APIListenAddr:      "127.0.0.1:9090",
+				APIServerMode:      APIServerModeHTTP,
 				ShutdownTimeoutSec: 5,
 				SettingsDBPath:     validSettingsDB,
 				CrtPath:            "",
@@ -456,6 +523,7 @@ func TestConfigValidate(t *testing.T) {
 				BPFProgramPath:     validBPF,
 				BPFPinPath:         tmpDir,
 				APIListenAddr:      "127.0.0.1:9090",
+				APIServerMode:      APIServerModeHTTP,
 				ShutdownTimeoutSec: 5,
 				SettingsDBPath:     validSettingsDB,
 				CrtPath:            validCertFile,
@@ -676,6 +744,7 @@ debug: true
 bpf_program_path: ./l4_filter.o
 bpf_pin_path: /sys/fs/bpf/
 api_listen_addr: 127.0.0.1:9090
+api_server_mode: http
 shutdown_timeout_sec: 5
 db_path: ./leshy-db.db
 crt_path: ./server.crt
@@ -733,6 +802,7 @@ debug: true
 bpf_program_path: ` + bpfFile + `
 bpf_pin_path: ` + bpfPinDir + `
 api_listen_addr: 127.0.0.1:9090
+api_server_mode: http
 shutdown_timeout_sec: 5
 db_path: ` + dbFile + `
 crt_path: ` + certFile + `

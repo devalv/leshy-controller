@@ -1,6 +1,9 @@
 name: Trivy CBPF builder scan
 
-on: [pull_request]
+on:
+  pull_request:
+    paths:
+      - 'cbpf/**'
 
 permissions:
   contents: read

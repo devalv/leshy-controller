@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
+
 	"github.com/devalv/leshy-controller/internal/application/filter"
 	"github.com/devalv/leshy-controller/internal/application/management"
 )

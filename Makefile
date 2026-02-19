@@ -1,4 +1,6 @@
 SWAG_VERSION ?= v1.16.4
+PROTOC_GEN_GO_VERSION ?= v1.36.10
+PROTOC_GEN_GO_GRPC_VERSION ?= v1.5.1
 
 setup:
 	go install golang.org/x/tools/cmd/goimports@latest
@@ -6,10 +8,10 @@ setup:
 
 fmt:
 	go mod tidy
-	gofmt -w -s ./cmd ./internal
-	gofumpt -w ./cmd ./internal
-	goimports -w ./cmd ./internal
-	golangci-lint run --fix
+	#gofmt -w -s ./cmd ./internal
+	#gofumpt -w ./cmd ./internal
+	#goimports -w ./cmd ./internal
+	golangci-lint run --fix ./cmd/... ./internal/...
 
 test:
 	docker run --rm \
@@ -57,4 +59,12 @@ swagger:
 		golang:1.25-alpine \
 		sh -c "export GOCACHE=/tmp/go-build GOPATH=/tmp/go GOMODCACHE=/tmp/go/pkg/mod && go install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION) && /tmp/go/bin/swag init --generalInfo swagger_info.go --dir internal/interfaces/rest/v1,internal/contracts/rest/v1 --output docs/api/swagger --outputTypes json,yaml --parseInternal --generatedTime=false"
 
-.PHONY: setup fmt test build cover github-build run clean swagger build-deb
+grpc:
+	mkdir -p internal/contracts/grpc/v1
+	docker run --rm \
+		-v $(PWD):/app \
+		-w /app \
+		golang:1.25-alpine \
+		sh -c "apk add --no-cache protobuf protobuf-dev && export GOCACHE=/tmp/go-build GOPATH=/tmp/go GOMODCACHE=/tmp/go/pkg/mod && go install google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOC_GEN_GO_VERSION) && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$(PROTOC_GEN_GO_GRPC_VERSION) && PATH=/tmp/go/bin:$$PATH protoc -I . -I /usr/include --go_out=. --go_opt=module=github.com/devalv/leshy-controller --go-grpc_out=. --go-grpc_opt=module=github.com/devalv/leshy-controller docs/api/grpc/leshy_controller_v1.proto"
+
+.PHONY: setup fmt test build cover github-build run clean swagger build-deb grpc

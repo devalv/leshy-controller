@@ -119,7 +119,7 @@ func runTCShow(ctx context.Context, iface string) error {
 }
 
 // bpftoolFindProgramMapIDs ищет первую строку программы (по подстроке имени) и вытаскивает map_ids (если есть).
-func bpftoolFindProgramMapIDs(ctx context.Context, programName string) (progLine string, mapIDs string, err error) {
+func bpftoolFindProgramMapIDs(ctx context.Context, programName string) (progLine, mapIDs string, err error) {
 	if !isBpftoolAvailable() {
 		log.Warn().Msg("bpftool is not available on the system.")
 

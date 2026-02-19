@@ -1,0 +1,133 @@
+syntax = "proto3";
+
+package leshy.controller.v1;
+
+option go_package = "github.com/devalv/leshy-controller/internal/contracts/grpc/v1;grpcv1";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+// HTTP -> gRPC code mapping for this API:
+// - 400 Bad Request -> INVALID_ARGUMENT
+// - 401 Unauthorized -> UNAUTHENTICATED
+// - 404 Not Found -> NOT_FOUND
+// - 409 Conflict -> FAILED_PRECONDITION
+// - 503 Service Unavailable -> UNAVAILABLE
+// - 500 Internal Server Error -> INTERNAL
+
+// HealthService mirrors GET /api/healthz.
+service HealthService {
+  rpc Health(google.protobuf.Empty) returns (HealthResponse);
+}
+
+// FilterService mirrors /api/v1/filter endpoints.
+service FilterService {
+  // Mirrors POST /api/v1/allow.
+  // Auth metadata: "authorization: Bearer <access_token>".
+  rpc Allow(AllowRequest) returns (AllowResponse);
+
+  // Mirrors GET /api/v1/stats.
+  // Auth metadata: "authorization: Bearer <access_token>".
+  rpc Stats(google.protobuf.Empty) returns (StatsResponse);
+}
+
+// ManagementService mirrors /api/v1/management endpoints.
+service ManagementService {
+  // Mirrors POST /api/v1/management/settings.
+  // Bootstrap metadata: "x-bootstrap-token: <bootstrap_token>".
+  rpc CreateSettings(UpsertManagementSettingsRequest) returns (UpsertManagementSettingsResponse);
+
+  // Mirrors PATCH /api/v1/management/settings.
+  // Auth metadata: "authorization: Bearer <access_token>".
+  rpc UpdateSettings(UpsertManagementSettingsRequest) returns (UpsertManagementSettingsResponse);
+
+  // Mirrors GET /api/v1/management/settings.
+  // Auth metadata: "authorization: Bearer <access_token>".
+  rpc GetSettings(google.protobuf.Empty) returns (GetManagementSettingsResponse);
+
+  // Mirrors POST /api/v1/management/block.
+  // Auth metadata: "authorization: Bearer <access_token>".
+  rpc Block(google.protobuf.Empty) returns (BlockManagementResponse);
+}
+
+message HealthResponse {
+  string status = 1;
+  bool runtime_attached = 2;
+}
+
+message AllowRequest {
+  string ip = 1;
+  uint32 port = 2;
+}
+
+message AllowResponse {
+  string message = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  string ip = 3;
+  uint32 port = 4;
+}
+
+message StatsResponse {
+  uint64 allowed = 1;
+  uint64 dropped = 2;
+  uint64 syn_allowed = 3;
+  uint64 syn_dropped = 4;
+  uint64 active_flow_hits = 5;
+  uint64 pending_promotions = 6;
+  uint64 pending_expired_cleanups = 7;
+  uint64 ip_port_auth_hits = 8;
+  uint64 non_guarded_port_allowed = 9;
+  uint64 guarded_port_dropped = 10;
+  double allow_rate_percent = 11;
+  double drop_rate_percent = 12;
+}
+
+message UpsertManagementSettingsRequest {
+  string issuer = 1;
+  string audience = 2;
+  string jwks_url = 3;
+  string required_scope = 4;
+  string guarded_ports_range = 5;
+  string iface = 6;
+  int32 handshake_window_sec = 7;
+  int32 inactive_timer_sec = 8;
+}
+
+message UpsertManagementSettingsResponse {
+  string message = 1;
+  bool auth_configured = 2;
+  bool runtime_attached = 3;
+  string runtime_iface = 4;
+  string issuer = 5;
+  string audience = 6;
+  string jwks_url = 7;
+  string required_scope = 8;
+  string guarded_ports_range = 9;
+  string iface = 10;
+  int32 handshake_window_sec = 11;
+  int32 inactive_timer_sec = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message GetManagementSettingsResponse {
+  bool auth_configured = 1;
+  bool runtime_attached = 2;
+  string runtime_iface = 3;
+  string issuer = 4;
+  string audience = 5;
+  string jwks_url = 6;
+  string required_scope = 7;
+  string guarded_ports_range = 8;
+  string iface = 9;
+  int32 handshake_window_sec = 10;
+  int32 inactive_timer_sec = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message BlockManagementResponse {
+  string message = 1;
+  uint64 pending_entries_removed = 2;
+  uint64 active_flows_removed = 3;
+  bool runtime_attached = 4;
+  string runtime_iface = 5;
+}

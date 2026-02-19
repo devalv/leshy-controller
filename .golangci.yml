@@ -27,6 +27,17 @@ formatters:
     - gofmt
     - gofumpt
     - goimports
+  settings:
+    gofmt:
+      simplify: true
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/devalv/leshy-controller
+  exclusions:
+    paths:
+      - ".*\\.pb\\.go"  # Exclude protobuf generated files
 
 run:
   timeout: 5m

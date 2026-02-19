@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	ciliumebpf "github.com/cilium/ebpf"
+
 	"github.com/devalv/leshy-controller/internal/application/filter"
 )
 

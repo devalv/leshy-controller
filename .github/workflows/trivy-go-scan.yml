@@ -1,6 +1,13 @@
 name: Trivy Go Scan
 
-on: [pull_request]
+on:
+  pull_request:
+    paths:
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
 
 permissions:
   contents: read

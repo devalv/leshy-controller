@@ -16,6 +16,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	APIServerModeHTTP = "http"
+	APIServerModeGRPC = "grpc"
+)
+
 type Config struct {
 	Debug                    bool   `yaml:"debug"`
 	BPFProgramPath           string `yaml:"bpf_program_path"`
@@ -23,6 +28,7 @@ type Config struct {
 	SettingsDBPath           string `yaml:"db_path"`
 	ManagementBootstrapToken string `yaml:"management_bootstrap_token"`
 	APIListenAddr            string `yaml:"api_listen_addr"`
+	APIServerMode            string `yaml:"api_server_mode"`
 	ShutdownTimeoutSec       int    `yaml:"shutdown_timeout_sec"`
 	CrtPath                  string `yaml:"crt_path"`
 	KeyPath                  string `yaml:"key_path"`
@@ -165,6 +171,21 @@ func validateAPIListenAddr(addr string) error {
 	return nil
 }
 
+func validateAPIServerMode(mode string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(mode))
+	switch normalized {
+	case APIServerModeHTTP, APIServerModeGRPC:
+		return normalized, nil
+	default:
+		return "", fmt.Errorf(
+			"API server mode must be %q or %q, got %q",
+			APIServerModeHTTP,
+			APIServerModeGRPC,
+			mode,
+		)
+	}
+}
+
 // Проверяем значение завершения приложения.
 func validateShutdownTimeout(secs int) error {
 	const (
@@ -269,6 +290,12 @@ func (cfg *Config) Validate() error {
 
 	if err := validateAPIListenAddr(cfg.APIListenAddr); err != nil {
 		errs = append(errs, fmt.Errorf("APIListenAddr: %w", err))
+	}
+
+	if normalizedMode, err := validateAPIServerMode(cfg.APIServerMode); err != nil {
+		errs = append(errs, fmt.Errorf("APIServerMode: %w", err))
+	} else {
+		cfg.APIServerMode = normalizedMode
 	}
 
 	if err := validateShutdownTimeout(cfg.ShutdownTimeoutSec); err != nil {

@@ -84,7 +84,7 @@ func getExpiryUint64(window time.Duration) uint64 {
 	return expiryNano
 }
 
-func describeMonotonicExpiry(expiryMono uint64, nowMono uint64, nowWall time.Time) (time.Time, time.Duration, bool) {
+func describeMonotonicExpiry(expiryMono, nowMono uint64, nowWall time.Time) (time.Time, time.Duration, bool) {
 	if expiryMono == 0 || nowMono == 0 || nowWall.IsZero() {
 		return time.Time{}, 0, false
 	}
@@ -103,7 +103,7 @@ func describeMonotonicExpiryNow(expiryMono uint64) (time.Time, time.Duration, bo
 	return describeMonotonicExpiry(expiryMono, nowMono, time.Now().UTC())
 }
 
-func monotonicDeltaDuration(expiryMono uint64, nowMono uint64) time.Duration {
+func monotonicDeltaDuration(expiryMono, nowMono uint64) time.Duration {
 	if expiryMono >= nowMono {
 		diff := expiryMono - nowMono
 		if diff > maxInt64AsUint64 {
