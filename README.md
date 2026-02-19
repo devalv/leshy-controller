@@ -1,5 +1,6 @@
 # leshy-controller
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/devalv/leshy-controller)](https://goreportcard.com/report/github.com/devalv/leshy-controller)
 [![clang-format-check](https://github.com/devalv/leshy-controller/actions/workflows/clang-format.yml/badge.svg)](https://github.com/devalv/leshy-controller/actions/workflows/clang-format.yml)
 [![Hadolint Dockerfile scan](https://github.com/devalv/leshy-controller/actions/workflows/hadolint-scan.yml/badge.svg)](https://github.com/devalv/leshy-controller/actions/workflows/hadolint-scan.yml)
 [![semgrep Security Scan](https://github.com/devalv/leshy-controller/actions/workflows/semgrep-scan.yml/badge.svg)](https://github.com/devalv/leshy-controller/actions/workflows/semgrep-scan.yml)
