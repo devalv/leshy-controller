@@ -57,7 +57,6 @@ func (a *Application) Run(ctx context.Context) error {
 	for _, srv := range a.servers {
 		log.Info().Msgf("stopping %s", srv.Name())
 		if err := srv.Stop(stopCtx); err != nil { //nolint:contextcheck
-			// если таймаут истёк — это обычно ожидаемо: можно оставить как warn/debug.
 			log.Debug().Err(err).Msgf("failed to stop %s", srv.Name())
 			stopErr = errors.Join(stopErr, fmt.Errorf("%s: %w", srv.Name(), err))
 		}
