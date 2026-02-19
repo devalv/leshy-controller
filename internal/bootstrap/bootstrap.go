@@ -18,10 +18,13 @@ import (
 	leshybpf "github.com/devalv/leshy-controller/internal/infrastructure/leshybpf"
 	sqliteinfra "github.com/devalv/leshy-controller/internal/infrastructure/sqlite"
 	sqlitemigrations "github.com/devalv/leshy-controller/internal/infrastructure/sqlite/migrations"
+	grpcserver "github.com/devalv/leshy-controller/internal/interfaces/grpc/server"
+	grpcv1 "github.com/devalv/leshy-controller/internal/interfaces/grpc/v1"
 	httpserver "github.com/devalv/leshy-controller/internal/interfaces/rest/httpserver"
 	restrouter "github.com/devalv/leshy-controller/internal/interfaces/rest/router"
 	v1 "github.com/devalv/leshy-controller/internal/interfaces/rest/v1"
 	"github.com/devalv/leshy-controller/internal/runtime"
+	"google.golang.org/grpc"
 )
 
 func New(ctx context.Context, cfg *config.Config) (*runtime.Application, error) {
@@ -95,23 +98,43 @@ func New(ctx context.Context, cfg *config.Config) (*runtime.Application, error) 
 		RuntimeApplier: runtimeSettingsApplier,
 	})
 
-	// --- HTTP handlers (v1) ---
-	v1mux := http.NewServeMux()
-	v1.Register(v1mux, v1.Deps{
-		Filter:     filterSvc,
-		Management: managementSvc,
-	})
+	var apiServer runtime.Server
+	switch cfg.APIServerMode {
+	case config.APIServerModeHTTP:
+		// --- HTTP handlers (v1) ---
+		v1mux := http.NewServeMux()
+		v1.Register(v1mux, v1.Deps{
+			Filter:     filterSvc,
+			Management: managementSvc,
+		})
 
-	// --- REST router ---
-	root := restrouter.New(restrouter.Options{
-		HealthPath:    "/api/healthz",
-		HealthHandler: makeHealthHandler(managementSvc),
-	}, map[string]http.Handler{
-		"/api/v1/": v1mux,
-	})
+		// --- REST router ---
+		root := restrouter.New(restrouter.Options{
+			HealthPath:    "/api/healthz",
+			HealthHandler: makeHealthHandler(managementSvc),
+		}, map[string]http.Handler{
+			"/api/v1/": v1mux,
+		})
 
-	// http server
-	httpSrv := httpserver.New(cfg.APIListenAddr, cfg.CrtPath, cfg.KeyPath, root)
+		apiServer = httpserver.New(cfg.APIListenAddr, cfg.CrtPath, cfg.KeyPath, root)
+	case config.APIServerModeGRPC:
+		apiServer = grpcserver.New(
+			cfg.APIListenAddr,
+			cfg.CrtPath,
+			cfg.KeyPath,
+			func(server *grpc.Server) {
+				grpcv1.Register(server, grpcv1.Deps{
+					Filter:     filterSvc,
+					Management: managementSvc,
+				})
+			},
+		)
+	default:
+		_ = runtimeSettingsApplier.Close()
+		_ = settingsDB.Close()
+
+		return nil, fmt.Errorf("unsupported api_server_mode: %s", cfg.APIServerMode)
+	}
 
 	// closer server: держит runtime-applier живым и закрывает при shutdown
 	closer := runtime.NewCloserServer("leshybpf", func(stopCtx context.Context) error {
@@ -129,7 +152,7 @@ func New(ctx context.Context, cfg *config.Config) (*runtime.Application, error) 
 		runtime.Options{
 			ShutdownTimeout: time.Duration(cfg.ShutdownTimeoutSec) * time.Second,
 		},
-		httpSrv,
+		apiServer,
 		closer,
 		managementDBCloser,
 	)

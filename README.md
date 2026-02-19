@@ -59,8 +59,11 @@
 │   │   └── `config_test.go`
 │   │
 │   ├── contracts/
-│   │   └── rest/v1/
-│   │       └── `types.go`     # DTO REST API v1 (включая runtime_attached/runtime_iface)
+│   │   ├── rest/v1/
+│   │   │   └── `types.go`                 # DTO REST API v1 (включая runtime_attached/runtime_iface)
+│   │   └── grpc/v1/
+│   │       ├── `leshy_controller_v1.pb.go`
+│   │       └── `leshy_controller_v1_grpc.pb.go` # Сгенерированные контракты из docs/api/grpc/*.proto
 │   │
 │   ├── infrastructure/
 │   │   ├── jwtauth/
@@ -82,6 +85,12 @@
 │   │               └── `0001_create_management_settings.sql`
 │   │
 │   ├── interfaces/
+│   │   ├── grpc/
+│   │   │   ├── server/
+│   │   │   │   └── `server.go`   # gRPC transport (runtime.Server)
+│   │   │   └── v1/
+│   │   │       └── `api.go`      # gRPC handlers v1 + auth/validation/error mapping -> usecases
+│   │   │
 │   │   ├── rest/
 │   │   │   ├── httpserver/
 │   │   │   │   ├── `server.go`   # HTTP transport (runtime.Server)
@@ -91,8 +100,6 @@
 │   │   │   └── v1/
 │   │   │       └── `api.go`      # HTTP handlers v1, auth middleware + mapping -> usecases
 │   │   │
-│   │   └── grpc/                 # roadmap: mirror/replace REST routes via gRPC
-│   │
 │   └── runtime/
 │       ├── `app.go`          # Оркестратор жизненного цикла приложения
 │       ├── `close_server.go` # Adapter для graceful close ресурсов
@@ -115,6 +122,7 @@
 │   │
 │   ├── api/
 │   │   ├── grpc/
+│   │   │   └── `leshy_controller_v1.proto` # gRPC-контракт, зеркалирующий HTTP API
 │   │   └── swagger/
 │   │
 │   ├── badges/
@@ -139,7 +147,7 @@
 > **infrastructure/leshybpf** — это *конкретный secondary adapter* (инфраструктурный драйвер) для Linux/eBPF/TC.
 > Usecase-слой (`internal/application/filter`) **не знает** про `*ebpf.Map`, `tc`, `bpftool` и syscalls: он общается с инфраструктурой только через порт `filter.Backend`.
 > Внутри `leshybpf` собрана вся “железная” логика: attach/pin, работа с картами, byte order, и опциональная диагностика (только в debug).
-> gRPC-слой сохранен как roadmap: в дальнейшем текущие REST-сценарии будут продублированы/перенесены в gRPC transport.
+> API транспорт переключается через `api_server_mode`: `http` (REST) или `grpc` (protobuf контракт из `docs/api/grpc`).
 
 ## Вызовы консольных утилит
 
@@ -170,15 +178,27 @@
 
 [Дополнительные примеры](./docs/examples/basic.md)
 [openAPI](./docs/api/swagger/swagger.json)
+[gRPC proto](./docs/api/grpc/leshy_controller_v1.proto)
+
+Генерация Go-контрактов из protobuf:
+`make grpc`
+
+## Режим API сервера
+
+1. `api_server_mode: http`:
+   - запускается REST API на `api_listen_addr`;
+   - доступны `/api/healthz` и `/api/v1/*`.
+2. `api_server_mode: grpc`:
+   - запускается gRPC сервер на `api_listen_addr`;
+   - доступны сервисы `HealthService`, `FilterService`, `ManagementService` из `docs/api/grpc/leshy_controller_v1.proto`.
 
 ## Сброс настроек
 
 1. Остановите leshy-controller
 2. Удалите локальную БД (файл)
 3. Запустите leshy-controller
-4. Выполните повторную настройку (`/api/v1/management/settings`)
 
-## Поведение после настройки
+## Поведение после настройки (http)
 
 1. После первого успешного `POST /api/v1/management/settings` bootstrap-endpoint блокируется (`409 management settings are locked`), включая сценарий после перезапуска приложения.
 2. Для последующих изменений используется `PATCH /api/v1/management/settings` (Bearer JWT).
@@ -207,6 +227,36 @@
    - `409` если настройки еще не были заданы;
    - `503` если авторизация или filter-runtime недоступны;
    - `500` при внутренней ошибке очистки.
+
+## Поведение после настройки (grpc)
+
+1. После первого успешного `ManagementService/CreateSettings` bootstrap-вызов блокируется и повторный вызов вернет `FailedPrecondition` (`management settings are locked`), включая сценарий после перезапуска приложения.
+2. Для последующих изменений используется `ManagementService/UpdateSettings` (Bearer JWT в metadata `authorization`).
+3. После перезапуска приложение читает сохранённые settings из SQLite и повторно применяет их в runtime (attach выполняется автоматически при наличии сохраненных настроек).
+4. Для ротации ключей публикуйте новый ключ в JWKS с новым `kid`, затем выпускайте новые JWT с этим `kid`.
+5. Если `management_bootstrap_token` не задан в конфиге, `ManagementService/CreateSettings` вернёт `Unavailable`.
+6. Если settings еще не заданы, runtime не подключен:
+   - `FilterService/Allow` вернет `Unavailable` (`Authorization is unavailable`);
+   - `FilterService/Stats` вернет `Unavailable` (`Authorization is unavailable`);
+   - `HealthService/Health` вернет `runtime_attached: false`.
+7. Runtime-статус дублируется в:
+   - `HealthService/Health` (`runtime_attached`);
+   - `ManagementService/GetSettings`;
+   - `ManagementService/CreateSettings`;
+   - `ManagementService/UpdateSettings`;
+   - `ManagementService/Block`.
+8. Типовые ответы для `ManagementService/UpdateSettings`:
+   - `OK` при успешном обновлении;
+   - `InvalidArgument` при ошибках валидации запроса;
+   - `Unauthenticated` при невалидном или отсутствующем `authorization: Bearer ...`;
+   - `FailedPrecondition` если настройки еще не были заданы;
+   - `Unavailable` если авторизация временно недоступна (`authorization unavailable`).
+9. Типовые ответы для `ManagementService/Block`:
+   - `OK` при успешной очистке разрешающих правил;
+   - `Unauthenticated` при невалидном или отсутствующем `authorization: Bearer ...`;
+   - `FailedPrecondition` если настройки еще не были заданы;
+   - `Unavailable` если авторизация или filter-runtime недоступны;
+   - `Internal` при внутренней ошибке очистки.
 
 ## Дополнительная документация
 [architecture.md](./docs/architecture.md)

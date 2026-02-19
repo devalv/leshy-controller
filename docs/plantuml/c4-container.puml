@@ -9,8 +9,8 @@ System_Ext(kernel, "Linux Kernel (TC/eBPF)", "Host networking runtime")
 System_Ext(jwks, "JWKS Provider", "External auth service")
 
 System_Boundary(leshy_boundary, "leshy-controller") {
-  Container(api, "REST API", "Go net/http", "/api/healthz and /api/v1 routes")
-  Container(grpc, "gRPC API", "Go gRPC", "Roadmap: mirror/replace REST routes")
+  Container(api, "REST API", "Go net/http", "Enabled when api_server_mode=http; /api/healthz and /api/v1 routes")
+  Container(grpc, "gRPC API", "Go gRPC", "Enabled when api_server_mode=grpc; HealthService/FilterService/ManagementService")
   Container(mgmt, "Management Service", "Go application service", "Bootstrap auth, JWT auth, settings validation (iface, guarded_ports_range, handshake_window_sec, inactive_timer_sec)")
   Container(filt, "Filter Service", "Go application service", "allow/stats/block orchestration")
   Container(verifier, "JWT/JWKS Verifier", "Go infrastructure adapter", "Ed25519 verification and JWKS cache/fetch")
@@ -19,10 +19,12 @@ System_Boundary(leshy_boundary, "leshy-controller") {
   ContainerDb(settings_db, "SQLite", "SQLite", "management_settings data")
 }
 
-Rel(dispatcher, api, "HTTPS/REST")
+Rel(dispatcher, api, "HTTPS/REST (api_server_mode=http)")
+Rel(dispatcher, grpc, "TLS gRPC (api_server_mode=grpc)")
 Rel(api, mgmt, "settings get/post/patch and authorization")
 Rel(api, filt, "allow/stats/block use cases")
-Rel(api, grpc, "Future API parity")
+Rel(grpc, mgmt, "Create/Update/GetSettings and authorization")
+Rel(grpc, filt, "Allow/Stats/Block")
 
 Rel(mgmt, repo, "Load/Save settings")
 Rel(repo, settings_db, "Read/Write")
