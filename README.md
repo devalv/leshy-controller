@@ -10,7 +10,7 @@
 [![coverage](./docs/badges/coverage.svg)](https://github.com/devalv/leshy-controller/actions/workflows/coverage-badge.yml)
 [![Dependency Graph](https://github.com/devalv/leshy-controller/actions/workflows/dependabot/update-graph/badge.svg)](https://github.com/devalv/leshy-controller/actions/workflows/dependabot/update-graph)
 
-Леший - контроллер.
+"Контроллер "Леший"
 
 ## Компоненты
 
