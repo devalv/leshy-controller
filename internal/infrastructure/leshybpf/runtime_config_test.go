@@ -59,7 +59,6 @@ func TestSetInactiveTimerSec(t *testing.T) {
 	key := uint32(0)
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			err := SetInactiveTimerSec(m, tt.timerSec)
 			if tt.wantErr {
@@ -117,7 +116,6 @@ func TestSetRuntimeInactiveAllowNS(t *testing.T) {
 	key := uint32(0)
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			var m *ebpf.Map
 			if !tt.useNilMap {

@@ -22,7 +22,6 @@ func TestHostToNetworkPort_MatchesBigEndianEncoding(t *testing.T) {
 	}
 
 	for _, p := range tests {
-		p := p
 		t.Run("value", func(t *testing.T) {
 			t.Parallel()
 
@@ -54,7 +53,6 @@ func TestHostNetwork_Roundtrip(t *testing.T) {
 	}
 
 	for _, p := range tests {
-		p := p
 		t.Run("roundtrip", func(t *testing.T) {
 			t.Parallel()
 
@@ -75,7 +73,6 @@ func TestNetworkToHostPort_SameAsHostToNetworkPort(t *testing.T) {
 	tests := []uint16{0, 1, 80, 443, 8080, 65535, 0x1234, 0xABCD}
 
 	for _, p := range tests {
-		p := p
 		t.Run("symmetry", func(t *testing.T) {
 			t.Parallel()
 

@@ -3,7 +3,7 @@ package leshybpf
 import (
 	"errors"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -32,7 +32,7 @@ func newGuardedPortsMap(t *testing.T) *ebpf.Map {
 
 func sortedU16(in []uint16) []uint16 {
 	out := append([]uint16(nil), in...)
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 
@@ -75,7 +75,6 @@ func TestParsePortRange_Invalid(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

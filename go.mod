@@ -1,6 +1,6 @@
 module github.com/devalv/leshy-controller
 
-go 1.25.3
+go 1.26.0
 
 require (
 	github.com/cilium/ebpf v0.20.0

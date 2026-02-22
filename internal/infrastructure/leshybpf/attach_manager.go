@@ -150,14 +150,14 @@ func pinProgram(prog *ebpf.Program, progPinFile string) error {
 
 func attachPinnedProgramToTC(ctx context.Context, iface, progPinFile string) error {
 	// tc qdisc add ... clsact
-	if out, err := runCmd(ctx, "tc", "qdisc", "add", "dev", iface, "clsact"); err != nil {
+	if out, err := runCmd(ctx, commandTC, "qdisc", "add", "dev", iface, "clsact"); err != nil {
 		return fmt.Errorf("tc qdisc add clsact: %w: %s", err, string(out))
 	}
 
 	// tc filter replace ... pinned <progPinFile>
-	cmd, cancel := startCmd(
+	cmd, cancel, err := startCmd(
 		ctx,
-		"tc",
+		commandTC,
 		"filter",
 		"replace",
 		"dev",
@@ -172,6 +172,9 @@ func attachPinnedProgramToTC(ctx context.Context, iface, progPinFile string) err
 		"pinned",
 		progPinFile,
 	)
+	if err != nil {
+		return fmt.Errorf("prepare tc filter replace command: %w", err)
+	}
 	defer cancel()
 
 	cmd.Stdout = os.Stdout
@@ -238,7 +241,7 @@ func runDebugDiagnostics(ctx context.Context, debug bool, iface, bpfPinPath stri
 func cleanupExistingArtifacts(ctx context.Context, iface, bpfPinPath string, debug bool) error {
 	log.Debug().Msgf("cleaning up old TC filters and maps for interface %s", iface)
 
-	if out, err := runCmd(ctx, "tc", "qdisc", "del", "dev", iface, "clsact"); err != nil {
+	if out, err := runCmd(ctx, commandTC, "qdisc", "del", "dev", iface, "clsact"); err != nil {
 		// ошибка может быть нормой на чистой системе
 		log.Warn().Err(err).Msgf("tc qdisc del clsact: %s", string(out))
 	}
