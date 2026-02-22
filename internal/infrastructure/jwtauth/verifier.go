@@ -243,8 +243,8 @@ func (v *Verifier) fetchKeys(ctx context.Context, jwksURL string) (map[string]ed
 		return nil, fmt.Errorf("create jwks request: %w", err)
 	}
 
-	//nolint:gosec // Request URL is strictly validated as absolute HTTPS with a non-empty host.
-	resp, err := v.httpClient.Do(req)
+	// Request URL is strictly validated as absolute HTTPS with a non-empty host.
+	resp, err := v.httpClient.Do(req) //nolint:gosec,G704
 	if err != nil {
 		return nil, fmt.Errorf("execute jwks request: %w", err)
 	}
