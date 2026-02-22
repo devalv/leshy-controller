@@ -97,7 +97,7 @@ func RunDiagnostics(ctx context.Context, opts DiagnosticsOptions) error {
 }
 
 func runTCShow(ctx context.Context, iface string) error {
-	out, err := runCmd(ctx, "tc", "filter", "show", "dev", iface, "ingress")
+	out, err := runCmd(ctx, commandTC, "filter", "show", "dev", iface, "ingress")
 	if err != nil {
 		return fmt.Errorf("tc filter show failed: %w: %s", err, string(out))
 	}
@@ -126,7 +126,7 @@ func bpftoolFindProgramMapIDs(ctx context.Context, programName string) (progLine
 		return "", "", nil
 	}
 
-	out, err := runCmd(ctx, "bpftool", "prog", "list")
+	out, err := runCmd(ctx, commandBPFTool, "prog", "list")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to list bpf programs with bpftool: %w: %s", err, string(out))
 	}
@@ -228,7 +228,7 @@ func bpftoolMapList(ctx context.Context) ([]string, error) {
 		return nil, nil
 	}
 
-	out, err := runCmd(ctx, "bpftool", "map", "list")
+	out, err := runCmd(ctx, commandBPFTool, "map", "list")
 	if err != nil {
 		return nil, fmt.Errorf("bpftool map list failed: %w: %s", err, string(out))
 	}

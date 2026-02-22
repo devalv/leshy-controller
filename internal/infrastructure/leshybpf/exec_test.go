@@ -20,7 +20,7 @@ func TestRunCmd_Success_ReturnsStdout(t *testing.T) {
 	t.Parallel()
 	requireCmd(t, "sh")
 
-	out, err := runCmd(context.Background(), "sh", "-c", "printf 'ok'")
+	out, err := runCmd(context.Background(), commandShell, "-c", "printf 'ok'")
 	if err != nil {
 		t.Fatalf("expected nil error, got %v (out=%q)", err, string(out))
 	}
@@ -34,7 +34,7 @@ func TestRunCmd_NonZeroExit_ReturnsErrorAndStderr(t *testing.T) {
 	requireCmd(t, "sh")
 
 	// stderr + exit 2
-	out, err := runCmd(context.Background(), "sh", "-c", "echo 'boom' 1>&2; exit 2")
+	out, err := runCmd(context.Background(), commandShell, "-c", "echo 'boom' 1>&2; exit 2")
 	if err == nil {
 		t.Fatalf("expected error, got nil (out=%q)", string(out))
 	}
@@ -47,10 +47,11 @@ func TestRunCmd_NonZeroExit_ReturnsErrorAndStderr(t *testing.T) {
 
 func TestRunCmd_Timeout_KillsProcess(t *testing.T) {
 	t.Parallel()
+	requireCmd(t, "sleep")
 
 	ctx := context.Background()
 
-	_, err := runCmd(ctx, "sleep", "10")
+	_, err := runCmd(ctx, commandSleep, "10")
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -80,7 +81,10 @@ func TestStartCmd_CancelStopsProcess(t *testing.T) {
 	t.Parallel()
 	requireCmd(t, "sh")
 
-	cmd, cancel := startCmd(context.Background(), "sh", "-c", "sleep 10")
+	cmd, cancel, err := startCmd(context.Background(), commandShell, "-c", "sleep 10")
+	if err != nil {
+		t.Fatalf("failed to prepare command: %v", err)
+	}
 	t.Cleanup(func() { cancel() })
 
 	if err := cmd.Start(); err != nil {
@@ -95,7 +99,7 @@ func TestStartCmd_CancelStopsProcess(t *testing.T) {
 	cancel()
 
 	startWait := time.Now()
-	err := cmd.Wait()
+	err = cmd.Wait()
 	elapsed := time.Since(startWait)
 
 	if err == nil {
@@ -118,7 +122,10 @@ func TestStartCmd_TimeoutStopsProcessEvenWithoutCancel(t *testing.T) {
 	t.Parallel()
 	requireCmd(t, "sh")
 
-	cmd, cancel := startCmd(context.Background(), "sh", "-c", "sleep 10")
+	cmd, cancel, err := startCmd(context.Background(), commandShell, "-c", "sleep 10")
+	if err != nil {
+		t.Fatalf("failed to prepare command: %v", err)
+	}
 	defer cancel() // освобождаем ресурсы таймера/контекста
 
 	if err := cmd.Start(); err != nil {
@@ -126,7 +133,7 @@ func TestStartCmd_TimeoutStopsProcessEvenWithoutCancel(t *testing.T) {
 	}
 
 	startWait := time.Now()
-	err := cmd.Wait()
+	err = cmd.Wait()
 	elapsed := time.Since(startWait)
 
 	if err == nil {
@@ -136,5 +143,17 @@ func TestStartCmd_TimeoutStopsProcessEvenWithoutCancel(t *testing.T) {
 	// Должно завершиться примерно за cmdTimeout (+ запас)
 	if elapsed > cmdTimeout+1500*time.Millisecond {
 		t.Fatalf("process did not stop by timeout fast enough: elapsed=%v timeout=%v", elapsed, cmdTimeout)
+	}
+}
+
+func TestRunCmd_UnsupportedCommand_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	_, err := runCmd(context.Background(), systemCommand(0))
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unsupported system command") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

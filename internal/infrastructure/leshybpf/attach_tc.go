@@ -55,13 +55,13 @@ func cleanupOldProgramsViaBPFTool(ctx context.Context) error {
 		return nil
 	}
 
-	out, err := runCmd(ctx, "bpftool", "prog", "list")
+	out, err := runCmd(ctx, commandBPFTool, "prog", "list")
 	if err != nil {
 		return fmt.Errorf("failed to list bpf programs with bpftool: %w: %s", err, string(out))
 	}
 
-	lines := strings.Split(string(out), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(out), "\n")
+	for line := range lines {
 		if strings.Contains(line, ProgramName) {
 			parts := strings.Fields(line)
 			if len(parts) == 0 {
@@ -71,7 +71,7 @@ func cleanupOldProgramsViaBPFTool(ctx context.Context) error {
 			progID := strings.TrimSuffix(parts[0], ":")
 			log.Debug().Msgf("removing old BPF program ID: %s", progID)
 
-			delOut, delErr := runCmd(ctx, "bpftool", "prog", "delete", "id", progID)
+			delOut, delErr := runCmd(ctx, commandBPFTool, "prog", "delete", "id", progID)
 			if delErr != nil {
 				return fmt.Errorf("removing old BPF program ID %s: %w: %s", progID, delErr, string(delOut))
 			}
@@ -101,7 +101,7 @@ func testPendingWritable(coll *ebpf.Collection) error {
 }
 
 func checkTCFilterAttached(ctx context.Context, iface string) error {
-	out, err := runCmd(ctx, "tc", "filter", "show", "dev", iface, "ingress")
+	out, err := runCmd(ctx, commandTC, "filter", "show", "dev", iface, "ingress")
 	if err != nil {
 		return fmt.Errorf("running tc filter show: %w: %s", err, string(out))
 	}

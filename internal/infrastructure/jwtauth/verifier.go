@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -76,10 +78,7 @@ func NewVerifier(opts VerifierOptions) *Verifier {
 		cacheTTL = defaultCacheTTL
 	}
 
-	leeway := opts.Leeway
-	if leeway < 0 {
-		leeway = 0
-	}
+	leeway := max(opts.Leeway, 0)
 	if leeway == 0 {
 		leeway = defaultLeeway
 	}
@@ -180,10 +179,8 @@ func hasRequiredScope(scopeValue string, scpValues []string, requiredScope strin
 		return true
 	}
 
-	for _, candidate := range strings.Fields(scopeValue) {
-		if candidate == requiredScope {
-			return true
-		}
+	if slices.Contains(strings.Fields(scopeValue), requiredScope) {
+		return true
 	}
 
 	for _, candidate := range scpValues {
@@ -236,11 +233,17 @@ func (v *Verifier) cachedKeys(jwksURL string) (map[string]ed25519.PublicKey, boo
 }
 
 func (v *Verifier) fetchKeys(ctx context.Context, jwksURL string) (map[string]ed25519.PublicKey, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURL, nil)
+	parsedURL, err := validateJWKSFetchURL(jwksURL)
+	if err != nil {
+		return nil, fmt.Errorf("validate jwks request url: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("create jwks request: %w", err)
 	}
 
+	// #nosec G704 -- Request URL is validated as absolute HTTPS with non-empty host in validateJWKSFetchURL.
 	resp, err := v.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("execute jwks request: %w", err)
@@ -290,6 +293,29 @@ func (v *Verifier) fetchKeys(ctx context.Context, jwksURL string) (map[string]ed
 	}
 
 	return keys, nil
+}
+
+func validateJWKSFetchURL(rawURL string) (*url.URL, error) {
+	jwksURL := strings.TrimSpace(rawURL)
+	if jwksURL == "" {
+		return nil, errors.New("jwks url cannot be empty")
+	}
+
+	parsedURL, err := url.Parse(jwksURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse jwks url: %w", err)
+	}
+	if !parsedURL.IsAbs() {
+		return nil, errors.New("jwks url must be an absolute URL")
+	}
+	if parsedURL.Scheme != "https" {
+		return nil, errors.New("jwks url scheme must be https")
+	}
+	if parsedURL.Host == "" {
+		return nil, errors.New("jwks url host cannot be empty")
+	}
+
+	return parsedURL, nil
 }
 
 func cloneKeys(source map[string]ed25519.PublicKey) map[string]ed25519.PublicKey {

@@ -2,6 +2,7 @@ package leshybpf
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -78,22 +79,22 @@ func parsePortRange(portsRange string) ([]uint16, error) {
 		return nil, fmt.Errorf("invalid port range format: %s", portsRange)
 	}
 
-	start, err := strconv.ParseUint(parts[0], 10, 16)
+	start, err := parsePort(parts[0], "start")
 	if err != nil {
-		return nil, fmt.Errorf("invalid start port: %s", parts[0])
+		return nil, err
 	}
 
-	end, err := strconv.ParseUint(parts[1], 10, 16)
+	end, err := parsePort(parts[1], "end")
 	if err != nil {
-		return nil, fmt.Errorf("invalid end port: %s", parts[1])
+		return nil, err
 	}
 
 	if start > end {
 		return nil, fmt.Errorf("invalid port range: start %d is greater than end %d", start, end)
 	}
 
-	portsCount := end - start + 1
-	if portsCount > GuardedPortsMax {
+	portsCount := int(end-start) + 1
+	if portsCount > int(GuardedPortsMax) {
 		return nil, fmt.Errorf(
 			"port range contains %d ports, maximum supported is %d",
 			portsCount,
@@ -101,10 +102,25 @@ func parsePortRange(portsRange string) ([]uint16, error) {
 		)
 	}
 
-	var ports []uint16
-	for p := start; p <= end; p++ {
-		ports = append(ports, uint16(p))
+	ports := make([]uint16, 0, portsCount)
+	for p := start; ; p++ {
+		ports = append(ports, p)
+		if p == end {
+			break
+		}
 	}
 
 	return ports, nil
+}
+
+func parsePort(rawValue, fieldName string) (uint16, error) {
+	value, err := strconv.ParseUint(rawValue, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s port: %s", fieldName, rawValue)
+	}
+	if value > math.MaxUint16 {
+		return 0, fmt.Errorf("invalid %s port: %s", fieldName, rawValue)
+	}
+
+	return uint16(value), nil
 }

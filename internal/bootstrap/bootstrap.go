@@ -16,7 +16,7 @@ import (
 	"github.com/devalv/leshy-controller/internal/application/filter"
 	"github.com/devalv/leshy-controller/internal/application/management"
 	"github.com/devalv/leshy-controller/internal/config"
-	"github.com/devalv/leshy-controller/internal/infrastructure/jwtauth"
+	jwtauth "github.com/devalv/leshy-controller/internal/infrastructure/jwtauth"
 	leshybpf "github.com/devalv/leshy-controller/internal/infrastructure/leshybpf"
 	sqliteinfra "github.com/devalv/leshy-controller/internal/infrastructure/sqlite"
 	sqlitemigrations "github.com/devalv/leshy-controller/internal/infrastructure/sqlite/migrations"

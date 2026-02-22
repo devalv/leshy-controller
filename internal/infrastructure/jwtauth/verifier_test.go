@@ -19,10 +19,10 @@ import (
 func TestVerifierValidateSettings(t *testing.T) {
 	t.Parallel()
 
-	_, privateKey, kid, jwksURL := createJWKSFixture(t)
+	_, privateKey, kid, jwksURL, jwksClient := createJWKSFixture(t)
 	_ = privateKey
 
-	v := NewVerifier(VerifierOptions{})
+	v := NewVerifier(VerifierOptions{HTTPClient: jwksClient})
 	err := v.ValidateSettings(context.Background(), management.Settings{JWKSURL: jwksURL})
 	if err != nil {
 		t.Fatalf("ValidateSettings() error = %v, want nil", err)
@@ -36,7 +36,7 @@ func TestVerifierValidateSettings(t *testing.T) {
 func TestVerifierVerifyAccessToken(t *testing.T) {
 	t.Parallel()
 
-	pub, privateKey, kid, jwksURL := createJWKSFixture(t)
+	pub, privateKey, kid, jwksURL, jwksClient := createJWKSFixture(t)
 	_ = pub
 
 	now := time.Date(2026, time.February, 7, 12, 0, 0, 0, time.UTC)
@@ -84,6 +84,7 @@ func TestVerifierVerifyAccessToken(t *testing.T) {
 			name:  "success",
 			token: validToken,
 			options: VerifierOptions{
+				HTTPClient: jwksClient,
 				Now: func() time.Time {
 					return now
 				},
@@ -93,6 +94,7 @@ func TestVerifierVerifyAccessToken(t *testing.T) {
 			name:  "missing required scope",
 			token: tokenWithoutScope,
 			options: VerifierOptions{
+				HTTPClient: jwksClient,
 				Now: func() time.Time {
 					return now
 				},
@@ -103,6 +105,7 @@ func TestVerifierVerifyAccessToken(t *testing.T) {
 			name:  "key id is not present in jwks",
 			token: tokenUnknownKid,
 			options: VerifierOptions{
+				HTTPClient: jwksClient,
 				Now: func() time.Time {
 					return now
 				},
@@ -139,7 +142,7 @@ func TestVerifierVerifyAccessToken(t *testing.T) {
 func TestVerifierVerifyAccessTokenJWKSUnavailable(t *testing.T) {
 	t.Parallel()
 
-	pub, privateKey, kid, _ := createJWKSFixture(t)
+	pub, privateKey, kid, _, _ := createJWKSFixture(t)
 	_ = pub
 
 	now := time.Date(2026, time.February, 7, 12, 0, 0, 0, time.UTC)
@@ -152,13 +155,14 @@ func TestVerifierVerifyAccessTokenJWKSUnavailable(t *testing.T) {
 		now:        now,
 	})
 
-	brokenJWKS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	brokenJWKS := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "upstream is down", http.StatusInternalServerError)
 	}))
 	t.Cleanup(brokenJWKS.Close)
 
 	v := NewVerifier(VerifierOptions{
-		Now: func() time.Time { return now },
+		HTTPClient: brokenJWKS.Client(),
+		Now:        func() time.Time { return now },
 	})
 
 	err := v.VerifyAccessToken(context.Background(), management.Settings{
@@ -175,7 +179,7 @@ func TestVerifierVerifyAccessTokenJWKSUnavailable(t *testing.T) {
 	}
 }
 
-func createJWKSFixture(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey, string, string) {
+func createJWKSFixture(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey, string, string, *http.Client) {
 	t.Helper()
 
 	pub, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -198,13 +202,13 @@ func createJWKSFixture(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey, str
 		t.Fatalf("json.Marshal() failed: %v", err)
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(body)
 	}))
 	t.Cleanup(server.Close)
 
-	return pub, privateKey, kid, server.URL
+	return pub, privateKey, kid, server.URL, server.Client()
 }
 
 type tokenInput struct {
