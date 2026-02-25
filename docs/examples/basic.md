@@ -45,6 +45,10 @@ key_path: ./server.key
 
 `leshy-controller` проверяет TLS-цепочку JWKS по системному trust store хоста.
 
+### 2.2 Пошаговый пример для stub-auth как подключить внешний auth-сервис
+
+[GitHub Gist](https://gist.github.com/devalv/33998fbcf2d1ae3ba53c835340ba3614)
+
 Требования:
 1. `jwks_url` должен быть `https://...` и сертификат должен быть валиден для хоста.
 2. Самоподписанный сертификат без доверенной CA приведет к ошибке загрузки JWKS.
