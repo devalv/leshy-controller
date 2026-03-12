@@ -21,7 +21,7 @@ RUN set -e && \
     ca-certificates=20230311+b9 \
     make=4.3-4.1+b4 \
     clang=1:16.0-57+b1 \
-    libbpf-dev=1:1.1.0-1.astra1 \
+    libbpf-dev=1:1.1.0-1.astra1+b2 \
     llvm=1:16.0-57+b1 \
     dpkg-dev=1.21.22.astra.se5  || exit 1 && \
     rm -rf /var/lib/apt/lists/*
