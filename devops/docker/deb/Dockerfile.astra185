@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${PACKAGE_ARCH} go build -trimpath -ldflags="-s -w" -o /tmp/leshy-controller ./cmd/controller
 
-FROM registry.astralinux.ru/library/astra/ubi18:1.8.4 AS builder
+FROM registry.astralinux.ru/library/astra/ubi18:1.8.5 AS builder
 
 ARG PACKAGE_VERSION=0.0.0
 ARG PACKAGE_ARCH=amd64

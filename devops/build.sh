@@ -6,7 +6,7 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "Project root: $PROJECT_ROOT"
 
-DOCKERFILE_PATH="devops/docker/cbpf/Dockerfile.astra184"
+DOCKERFILE_PATH="devops/docker/cbpf/Dockerfile.astra185"
 IMAGE_NAME="cbpf-builder"
 ARTIFACT_NAME="l4_filter.o"
 

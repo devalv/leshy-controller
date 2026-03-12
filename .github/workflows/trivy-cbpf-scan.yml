@@ -23,7 +23,7 @@ jobs:
           docker build \
             --target builder \
             -t cbpf-builder:latest \
-            -f devops/docker/cbpf/Dockerfile.astra184 .
+            -f devops/docker/cbpf/Dockerfile.astra185 .
 
       - name: Run Trivy vulnerability scanner on BUILDER stage
         uses: aquasecurity/trivy-action@master
