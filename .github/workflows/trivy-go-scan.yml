@@ -8,6 +8,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - '.golangci.yml'
+      - 'devops/docker/deb/**'
 
 permissions:
   contents: read

@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'cbpf/**'
+      - 'devops/docker/cbpf/**'
 
 permissions:
   contents: read
