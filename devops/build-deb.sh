@@ -3,7 +3,7 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DOCKERFILE_PATH="devops/docker/deb/Dockerfile.astra184"
+DOCKERFILE_PATH="devops/docker/deb/Dockerfile.astra185"
 IMAGE_NAME="leshy-controller-deb-builder"
 PACKAGE_ARCH="amd64"
 PACKAGE_VERSION="${PACKAGE_VERSION:-}"
