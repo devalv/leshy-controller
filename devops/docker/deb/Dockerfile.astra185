@@ -18,12 +18,12 @@ ARG PACKAGE_ARCH=amd64
 RUN set -e && \
     apt-get update || exit 1 && \
     apt-get install -y -q --no-install-recommends \
-    ca-certificates=20230311+b9 \
+    ca-certificates=20230311+deb12u1 \
     make=4.3-4.1+b4 \
     clang=1:16.0-57+b1 \
     libbpf-dev=1:1.1.0-1.astra1+b2 \
     llvm=1:16.0-57+b1 \
-    dpkg-dev=1.21.22.astra.se5  || exit 1 && \
+    dpkg-dev=1.21.22.astra.se5b1  || exit 1 && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
